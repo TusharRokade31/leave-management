@@ -1,0 +1,30 @@
+const mockAPI: { users: User[]; leaves: Leave[] } = {
+  users: [
+    { id: 1, name: 'John Doe', email: 'john@company.com', role: 'employee', password: 'emp123' },
+    { id: 2, name: 'Jane Manager', email: 'jane@company.com', role: 'manager', password: 'mgr123' },
+  ],
+  leaves: [
+    { 
+      id: 1, 
+      userId: 1, 
+      startDate: '2024-12-15', 
+      endDate: '2024-12-17', 
+      reason: 'Family vacation', 
+      status: 'pending', 
+      type: 'casual', 
+      days: 3,
+      requestedAt: '2024-12-10T10:30:00Z'
+    },
+    { 
+      id: 2, 
+      userId: 1, 
+      startDate: '2024-11-20', 
+      endDate: '2024-11-22', 
+      reason: 'Medical checkup', 
+      status: 'approved', 
+      type: 'sick', 
+      days: 3,
+      requestedAt: '2024-11-15T14:20:00Z'
+    },
+  ]
+};
