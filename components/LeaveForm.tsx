@@ -1,6 +1,8 @@
 // LeaveForm.tsx
 import React, { useState } from 'react';
 import { Calendar } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { LeaveFormData } from '@/type/form';
 
 interface LeaveFormProps {
@@ -18,6 +20,22 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
     endTime: ''
   });
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Convert string to Date object
+  const stringToDate = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  };
+
+  // Convert Date object to YYYY-MM-DD string
+  const dateToString = (date: Date | null): string => {
+    if (!date) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   const handleSubmit = async (): Promise<void> => {
     if (!formData.startDate || !formData.endDate || !formData.reason) {
@@ -47,8 +65,19 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
     }
   };
 
-  const handleStartDateChange = (date: string): void => {
-    setFormData({ ...formData, startDate: date, endDate: '' });
+  const handleStartDateChange = (date: Date | null): void => {
+    setFormData({ 
+      ...formData, 
+      startDate: dateToString(date), 
+      endDate: '' 
+    });
+  };
+
+  const handleEndDateChange = (date: Date | null): void => {
+    setFormData({ 
+      ...formData, 
+      endDate: dateToString(date) 
+    });
   };
 
   const handleTypeChange = (type: LeaveFormData['type']): void => {
@@ -72,25 +101,33 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Start Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
-              value={formData.startDate}
-              onChange={(e) => handleStartDateChange(e.target.value)}
+            <DatePicker
+              selected={stringToDate(formData.startDate)}
+              onChange={handleStartDateChange}
+              dateFormat="dd/MM/yyyy"
+              placeholderText="DD/MM/YYYY"
               disabled={isSubmitting}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100"
+              showYearDropdown
+              showMonthDropdown
+              dropdownMode="select"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               End Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
-              value={formData.endDate}
-              min={formData.startDate}
+            <DatePicker
+              selected={stringToDate(formData.endDate)}
+              onChange={handleEndDateChange}
+              dateFormat="dd/MM/yyyy"
+              placeholderText="DD/MM/YYYY"
+              minDate={stringToDate(formData.startDate)}
               disabled={!formData.startDate || isSubmitting}
-              onChange={(e) => setFormData({...formData, endDate: e.target.value})}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+              showYearDropdown
+              showMonthDropdown
+              dropdownMode="select"
             />
           </div>
         </div>

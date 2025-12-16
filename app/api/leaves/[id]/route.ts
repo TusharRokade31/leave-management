@@ -3,6 +3,12 @@ import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { sendLeaveNotification } from '@/lib/email';
 
+interface User {
+  id: number;
+  name: string | null;  // Allow null
+  email: string;        // Keep as string if email is required
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -37,7 +43,14 @@ export async function PATCH(
 
     // Send email notification
     const action = status.toUpperCase() === 'APPROVED' ? 'approved' : 'rejected';
-    await sendLeaveNotification(leave, leave.user, action);
+    await sendLeaveNotification(
+  leave, 
+  {
+    ...leave.user,
+    name: leave.user.name ?? 'Unknown User'
+  }, 
+  action
+);
 
     return NextResponse.json(leave);
   } catch (err: any) {

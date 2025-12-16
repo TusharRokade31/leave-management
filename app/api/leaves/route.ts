@@ -59,7 +59,14 @@ export async function POST(req: NextRequest) {
     });
 
     // Send email notification
-    await sendLeaveNotification(leave, leave.user, 'submitted');
+    await sendLeaveNotification(
+  leave, 
+  {
+    ...leave.user,
+    name: leave.user.name ?? 'Unknown User'
+  }, 
+  "submitted"
+);
 
     return NextResponse.json(leave, { status: 201 });
   } catch (err: any) {

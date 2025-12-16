@@ -40,6 +40,17 @@ model Leave {
   @@index([status])
 }
 
+
+model OTP {
+  id        Int      @id @default(autoincrement())
+  email     String
+  otp       String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
 enum Role {
   EMPLOYEE
   MANAGER

@@ -4,6 +4,17 @@ export interface LoginFormData {
   password: string;
 }
 
+export interface OTPFormData {
+  email: string;
+  otp: string;
+}
+
+export interface BulkUploadResult {
+  success: string[];
+  failed: Array<{ email: string; reason: string }>;
+  reset: string[];
+}
+
 export interface LeaveFormData {
   startDate: string;
   endDate: string;

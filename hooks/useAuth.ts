@@ -7,6 +7,7 @@ interface UseAuthReturn {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  otpLogin: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   checkAuth: () => Promise<void>;
 }
 
@@ -47,10 +48,36 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
+    const otpLogin = async (
+    email: string,
+    otp: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCurrentUser(data.user);
+        setAuthToken(data.token);
+
+        return { success: true };
+      }
+
+      return { success: false, error: data.error };
+    } catch (error) {
+      return { success: false, error: 'Network error' };
+    }
+  };
+
   const logout = (): void => {
     removeAuthToken();
     setCurrentUser(null);
   };
 
-  return { currentUser, loading, login, logout, checkAuth };
+  return { currentUser, loading, login, logout, otpLogin, checkAuth };
 };

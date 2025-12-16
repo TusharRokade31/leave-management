@@ -27,3 +27,12 @@ export function authenticateToken(req: NextRequest): AuthUser {
 export function generateToken(userId: number, role: string): string {
   return jwt.sign({ id: userId, role }, JWT_SECRET, { expiresIn: '24h' });
 }
+
+export function verifyToken(token: string): AuthUser {
+  try {
+    const user = jwt.verify(token, JWT_SECRET) as AuthUser;
+    return user;
+  } catch (err) {
+    throw new Error('Invalid or expired token');
+  }
+}

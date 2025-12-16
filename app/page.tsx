@@ -1,35 +1,41 @@
 "use client";
 import React, { useState } from 'react';
-import { Calendar, CheckCircle, XCircle, Clock, User, LogOut, Bell } from 'lucide-react';
-import {useAuth} from '@/hooks/useAuth';
-import {useLeaves} from '@/hooks/useLeaves'
-import {useDashboardLeaves} from '@/hooks/useDashboardLeave'
+import { Calendar, CheckCircle, XCircle, Clock, User, LogOut, Bell, Upload } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useLeaves } from '@/hooks/useLeaves';
+import { useDashboardLeaves } from '@/hooks/useDashboardLeave';
 import { LoginForm } from '@/components/LoginForm';
-import {Header} from '@/components/Header';
-import {StatsCards} from '@/components/StatsCard';
-import {LeaveForm} from '@/components/LeaveForm';
+import { Header } from '@/components/Header';
+import { StatsCards } from '@/components/StatsCard';
+import { LeaveForm } from '@/components/LeaveForm';
 import { EmployeeLeaveTable } from '@/components/EmployeeLeaveTable';
-import {ManagerLeaveTable} from'@/components/ManagerLeaveTable';
-import {NotificationPanel} from '@/components/NotificationPanel';
+import { ManagerLeaveTable } from '@/components/ManagerLeaveTable';
+import { NotificationPanel } from '@/components/NotificationPanel';
+import { BulkUploadModal } from '@/components/BulkUploadModal';
 import { LeaveFormData } from '@/type/form';
 import LeaveTable from '@/components/LeaveTable';
 
-
 export default function Home() {
-  const { currentUser, loading, login, logout } = useAuth();
+  const { currentUser, loading, login, otpLogin, logout } = useAuth();
   const leaveHooks = useLeaves(currentUser);
-  const leavedashboard= useDashboardLeaves(currentUser);
+  const leavedashboard = useDashboardLeaves(currentUser);
   const [showLeaveForm, setShowLeaveForm] = useState<boolean>(false);
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [showBulkUpload, setShowBulkUpload] = useState<boolean>(false);
 
   const handleLogin = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     return await login(email, password);
+  };
+
+  const handleOTPLogin = async (email: string, otp: string): Promise<{ success: boolean; error?: string }> => {
+    return await otpLogin(email, otp);
   };
 
   const handleLogout = (): void => {
     logout();
     setShowLeaveForm(false);
     setShowNotifications(false);
+    setShowBulkUpload(false);
   };
 
   const handleLeaveSubmit = async (formData: LeaveFormData): Promise<void> => {
@@ -49,7 +55,7 @@ export default function Home() {
   }
 
   if (!currentUser) {
-    return <LoginForm onLogin={handleLogin} />;
+    return <LoginForm onLogin={handleLogin} onOTPLogin={handleOTPLogin} />;
   }
 
   const pendingLeaves = leaveHooks.leaves.filter(l => l.status === 'PENDING');
@@ -100,7 +106,16 @@ export default function Home() {
 
         {!leaveHooks.loading && currentUser.role === 'MANAGER' && (
           <div className="space-y-6">
-            <h2 className="text-xl font-bold text-gray-800">All Leave Requests</h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-800">All Leave Requests</h2>
+              <button
+                onClick={() => setShowBulkUpload(true)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Bulk Upload Users
+              </button>
+            </div>
             
             <ManagerLeaveTable 
               leaves={leaveHooks.leaves}
@@ -109,8 +124,9 @@ export default function Home() {
             />
           </div>
         )}
+
         {!leaveHooks.loading && currentUser.role === 'MANAGER' && (
-          <div className="space-y-6">
+          <div className="space-y-6 mt-6">
             <h2 className="text-xl font-bold text-gray-800">Full Month Leave Requests</h2>
             
             <LeaveTable 
@@ -119,14 +135,16 @@ export default function Home() {
           </div>
         )}
       </div>
-      
 
       {showNotifications && currentUser.role === 'MANAGER' && (
         <NotificationPanel 
           recentRequests={pendingLeaves}
-          onClose={() => setShowNotifications(false)}
-        />
-      )}
-    </div>
-  );
-};
+          onClose={() =>setShowNotifications(false)}
+/>
+)}
+  {showBulkUpload && currentUser.role === 'MANAGER' && (
+    <BulkUploadModal onClose={() => setShowBulkUpload(false)} />
+  )}
+</div>
+);
+}
