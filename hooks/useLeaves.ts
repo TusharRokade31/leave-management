@@ -8,7 +8,7 @@ interface UseLeavesReturn {
   stats: Stats;
   fetchLeaves: () => Promise<void>;
   createLeave: (leaveData: LeaveFormData) => Promise<void>;
-  updateLeaveStatus: (leaveId: number, status: 'APPROVED' | 'REJECTED') => Promise<void>;
+  updateLeaveStatus: (leaveId: number, status: 'APPROVED' | 'REJECTED', comment?: string) => Promise<void>;
   deleteLeave: (leaveId: number) => Promise<void>;
 }
 
@@ -57,9 +57,13 @@ export const useLeaves = (currentUser: User | null): UseLeavesReturn => {
     }
   };
 
-  const updateLeaveStatus = async (leaveId: number, status: 'APPROVED' | 'REJECTED'): Promise<void> => {
+  const updateLeaveStatus = async (
+    leaveId: number, 
+    status: 'APPROVED' | 'REJECTED', 
+    comment?: string
+  ): Promise<void> => {
     try {
-      await api.updateLeaveStatus(leaveId, status);
+      await api.updateLeaveStatus(leaveId, status, comment);
       await fetchLeaves();
       alert(`Leave ${status.toLowerCase()} successfully!`);
     } catch (error) {

@@ -22,24 +22,24 @@ model User {
 }
 
 model Leave {
-  id        Int         @id @default(autoincrement())
-  userId    Int
-  startDate DateTime
-  endDate   DateTime
-  startTime String?     // Added for time tracking
-  endTime   String?     // Added for half day time tracking
-  reason    String      @db.Text
-  type      LeaveType   @default(FULL)
-  days      Int
-  status    LeaveStatus @default(PENDING)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            Int         @id @default(autoincrement())
+  userId        Int
+  startDate     DateTime
+  endDate       DateTime
+  startTime     String?
+  endTime       String?
+  reason        String      @db.Text
+  type          LeaveType   @default(FULL)
+  days          Int
+  status        LeaveStatus @default(PENDING)
+  managerComment String?    @db.Text  // Add this field
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
 }
-
 
 model OTP {
   id        Int      @id @default(autoincrement())

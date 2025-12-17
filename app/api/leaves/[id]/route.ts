@@ -5,8 +5,8 @@ import { sendLeaveNotification } from '@/lib/email';
 
 interface User {
   id: number;
-  name: string | null;  // Allow null
-  email: string;        // Keep as string if email is required
+  name: string | null;
+  email: string;
 }
 
 export async function PATCH(
@@ -21,15 +21,25 @@ export async function PATCH(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const { status } = await req.json();
+    const { status, comment } = await req.json(); // Add comment to destructure
 
     if (!['APPROVED', 'REJECTED'].includes(status?.toUpperCase())) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
+    // Validate comment if status is rejected
+    if (status.toUpperCase() === 'REJECTED' && !comment?.trim()) {
+      return NextResponse.json({ 
+        error: 'Comment is required when rejecting a leave request' 
+      }, { status: 400 });
+    }
+
     const leave = await prisma.leave.update({
       where: { id: parseInt(id) },
-      data: { status: status.toUpperCase() },
+      data: { 
+        status: status.toUpperCase(),
+        managerComment: comment?.trim() || null // Add manager comment
+      },
       include: {
         user: {
           select: {
@@ -44,13 +54,13 @@ export async function PATCH(
     // Send email notification
     const action = status.toUpperCase() === 'APPROVED' ? 'approved' : 'rejected';
     await sendLeaveNotification(
-  leave, 
-  {
-    ...leave.user,
-    name: leave.user.name ?? 'Unknown User'
-  }, 
-  action
-);
+      leave, 
+      {
+        ...leave.user,
+        name: leave.user.name ?? 'Unknown User'
+      }, 
+      action
+    );
 
     return NextResponse.json(leave);
   } catch (err: any) {
@@ -65,6 +75,7 @@ export async function PATCH(
   }
 }
 
+// DELETE function remains the same
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

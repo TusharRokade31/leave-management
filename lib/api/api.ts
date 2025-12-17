@@ -139,18 +139,26 @@ export const api = {
     return response.json();
   },
 
-  updateLeaveStatus: async (leaveId: number, status: 'APPROVED' | 'REJECTED'): Promise<Leave> => {
+updateLeaveStatus: async (
+    leaveId: number, 
+    status: 'APPROVED' | 'REJECTED', 
+    comment?: string
+  ): Promise<Leave> => {
+    const token = localStorage.getItem('token');
     const response = await fetch(`/api/leaves/${leaveId}`, {
       method: 'PATCH',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ 
+        status,
+        comment 
+      }),
     });
-    
+
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to update leave');
+      throw new Error(error.error || 'Failed to update leave status');
     }
-    
+
     return response.json();
   },
 

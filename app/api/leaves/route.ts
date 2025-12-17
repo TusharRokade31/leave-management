@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
         startDate: start,
         endDate: end,
         reason,
+        managerComment: null,
         type: type?.toUpperCase() || 'FULL',
         days,
         startTime: startTime || null,

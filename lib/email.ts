@@ -1,7 +1,9 @@
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || '465'),
+  secure: true, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -21,6 +23,7 @@ interface Leave {
   reason: string;
   startTime?: string | null;
   endTime?: string | null;
+  managerComment?: string | null; // Add this field
 }
 
 export const sendLeaveNotification = async (
@@ -78,6 +81,13 @@ export const sendLeaveNotification = async (
               <p><strong>Duration:</strong> ${leave.days} day(s)</p>
             </div>
             
+            ${leave.managerComment ? `
+            <div style="background-color: #E0E7FF; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 4px solid #4F46E5;">
+              <p style="margin: 0 0 5px 0; color: #4F46E5; font-weight: bold;">💬 Manager's Comment:</p>
+              <p style="margin: 0; color: #1E293B;">${leave.managerComment}</p>
+            </div>
+            ` : ''}
+            
             <div style="background-color: #D1FAE5; padding: 15px; border-radius: 5px; margin-top: 20px;">
               <p style="margin: 0; color: #065F46;"><strong>✓ Status:</strong> Approved</p>
             </div>
@@ -99,6 +109,13 @@ export const sendLeaveNotification = async (
               ${leave.startTime ? `<p><strong>Time:</strong> ${leave.startTime}${leave.endTime ? ` to ${leave.endTime}` : ''}</p>` : ''}
               <p><strong>Duration:</strong> ${leave.days} day(s)</p>
             </div>
+            
+            ${leave.managerComment ? `
+            <div style="background-color: #FEF3C7; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 4px solid #F59E0B;">
+              <p style="margin: 0 0 5px 0; color: #F59E0B; font-weight: bold;">💬 Manager's Comment:</p>
+              <p style="margin: 0; color: #1E293B;">${leave.managerComment}</p>
+            </div>
+            ` : ''}
             
             <div style="background-color: #FEE2E2; padding: 15px; border-radius: 5px; margin-top: 20px;">
               <p style="margin: 0; color: #991B1B;"><strong>✗ Status:</strong> Rejected</p>

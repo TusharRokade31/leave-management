@@ -6,6 +6,7 @@ interface Leave {
   endDate: string;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  managerComment?: string | null; // Add this field
   type: 'FULL' | 'HALF' | 'EARLY' | 'LATE';
   startTime?: string | null;
   endTime?: string | null;

@@ -119,8 +119,8 @@ export default function Home() {
             
             <ManagerLeaveTable 
               leaves={leaveHooks.leaves}
-              onApprove={(id) => leaveHooks.updateLeaveStatus(id, 'APPROVED')}
-              onReject={(id) => leaveHooks.updateLeaveStatus(id, 'REJECTED')}
+              onApprove={(id, comment) => leaveHooks.updateLeaveStatus(id, 'APPROVED', comment)}
+              onReject={(id, comment) => leaveHooks.updateLeaveStatus(id, 'REJECTED', comment)}
             />
           </div>
         )}
