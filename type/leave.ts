@@ -7,7 +7,7 @@ interface Leave {
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   managerComment?: string | null; // Add this field
-  type: 'FULL' | 'HALF' | 'EARLY' | 'LATE';
+  type: 'FULL' | 'HALF' | 'EARLY' | 'LATE' | 'WORK_FROM_HOME'; // Updated typ
   startTime?: string | null;
   endTime?: string | null;
   user?: {

@@ -140,8 +140,11 @@ const LeaveTable: React.FC<LeaveRecord> = ({ leaves }) => {
       case "EARLY":
         symbol = "E";
         break;
+      case "WORK_FROM_HOME": // Handle WFH symbol
+        symbol = "WFH";
+        break;
       default:
-        symbol = "L"; // fallback for CASUAL, SICK, LWP, etc.
+        symbol = "L"; 
     }
   }
 
@@ -150,12 +153,13 @@ const LeaveTable: React.FC<LeaveRecord> = ({ leaves }) => {
         getDayOfWeek(day) === "Sun" || getDayOfWeek(day) === "Sat";
 
       return (
-        <td
+       <td
       key={day}
       className={`
         border border-gray-300 p-1 text-center cursor-pointer hover:bg-blue-50
         ${isWeekend ? "bg-red-50" : ""}
-        ${isLeaveDay ? "bg-green-200 font-bold" : ""}
+        ${isLeaveDay && leaveForDay?.type === 'WORK_FROM_HOME' ? "bg-blue-200 font-bold text-xs" : ""} 
+        ${isLeaveDay && leaveForDay?.type !== 'WORK_FROM_HOME' ? "bg-green-200 font-bold" : ""}
       `}
     >
       {symbol}
@@ -184,6 +188,10 @@ const LeaveTable: React.FC<LeaveRecord> = ({ leaves }) => {
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 bg-orange-200 border"></div>
               <span>CL - Casual Leave</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-blue-200 border"></div>
+              <span>WFH - Work From Home</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 bg-red-200 border"></div>

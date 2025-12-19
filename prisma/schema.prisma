@@ -61,6 +61,7 @@ enum LeaveType {
   HALF
   EARLY
   LATE      // Added LATE for late coming
+  WORK_FROM_HOME // Added this
 }
 
 enum LeaveStatus {

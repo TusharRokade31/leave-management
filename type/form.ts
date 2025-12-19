@@ -19,7 +19,7 @@ export interface LeaveFormData {
   startDate: string;
   endDate: string;
   reason: string;
-  type: 'FULL' | 'HALF' | 'EARLY' | 'LATE';
+  type: 'FULL' | 'HALF' | 'EARLY' | 'LATE' | 'WORK_FROM_HOME'; // Updated type
   startTime?: string;
   endTime?: string;
 }
@@ -28,6 +28,7 @@ export interface Stats {
   total: number;
   pending: number;
   approved: number;
+  wfh: number; // Added this field
 }
 
 export interface AuthResult {

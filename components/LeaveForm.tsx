@@ -146,6 +146,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
             <option value="HALF">Half Day Leave</option>
             <option value="EARLY">Early Leave</option>
             <option value="LATE">Late Coming</option>
+            <option value="WORK_FROM_HOME">Work From Home</option>
           </select>
         </div>
 
