@@ -1,21 +1,48 @@
+// app/api/leaves/stats/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
-import { LeaveType } from '@prisma/client'; // Import this!
+import { LeaveType } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
     const baseWhere = authUser.role === 'EMPLOYEE' ? { userId: authUser.id } : {};
 
-    // Use LeaveType.WORK_FROM_HOME instead of the raw string
+    // Get query params
+    const { searchParams } = new URL(req.url);
+    const month = searchParams.get('month');
+    const year = searchParams.get('year');
+
+    // Build Date Filter
+    let dateFilter = {};
+    if (month && year) {
+      const m = parseInt(month);
+      const y = parseInt(year);
+      const startOfMonth = new Date(y, m - 1, 1);
+      const endOfMonth = new Date(y, m, 0, 23, 59, 59);
+
+      // Leaves active during this month
+      dateFilter = {
+        AND: [
+          { startDate: { lte: endOfMonth } },
+          { endDate: { gte: startOfMonth } }
+        ]
+      };
+    }
+
+    const commonWhere = {
+      ...baseWhere,
+      ...dateFilter
+    };
+
     const leaveWhere = { 
-      ...baseWhere, 
+      ...commonWhere, 
       type: { not: LeaveType.WORK_FROM_HOME } 
     };
     
     const wfhWhere = { 
-      ...baseWhere, 
+      ...commonWhere, 
       type: LeaveType.WORK_FROM_HOME 
     };
 

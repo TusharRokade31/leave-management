@@ -1,5 +1,7 @@
+// hooks/useDashboardLeave.ts
 import { useState, useEffect } from "react";
 import { Stats, LeaveFormData } from "@/type/form";
+
 import { api } from "@/lib/api/api";
 
 interface UseLeavesReturn {
@@ -12,7 +14,7 @@ interface UseLeavesReturn {
   deleteLeave: (leaveId: number) => Promise<void>;
 }
 
-export const useDashboardLeaves = (currentUser: User | null): UseLeavesReturn => {
+export const useDashboardLeaves = (currentUser: User | null, currentDate: Date): UseLeavesReturn => {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, approved: 0, wfh: 0 });
@@ -22,20 +24,24 @@ export const useDashboardLeaves = (currentUser: User | null): UseLeavesReturn =>
     
     setLoading(true);
     try {
+      const month = currentDate.getMonth() + 1;
+      const year = currentDate.getFullYear();
+
       let fetchedLeaves: Leave[];
       if (currentUser.role === 'MANAGER') {
-        fetchedLeaves = await api.getAllDashboardLeaves();
+        // Pass month and year to API
+        fetchedLeaves = await api.getAllDashboardLeaves(month, year);
       } else {
         fetchedLeaves = await api.getMyLeaves();
       }
       setLeaves(fetchedLeaves);
       
-      // Fetch stats
-      const fetchedStats = await api.getStats();
+      // Fetch stats for the specific month
+      const fetchedStats = await api.getStats(month, year);
       setStats(fetchedStats);
     } catch (error) {
       console.error('Failed to fetch leaves:', error);
-      alert('Failed to fetch leaves: ' + (error as Error).message);
+      // alert('Failed to fetch leaves: ' + (error as Error).message); // Optional: Disable alert on common fetches
     } finally {
       setLoading(false);
     }
@@ -43,7 +49,7 @@ export const useDashboardLeaves = (currentUser: User | null): UseLeavesReturn =>
 
   useEffect(() => {
     fetchLeaves();
-  }, [currentUser]);
+  }, [currentUser, currentDate]); // Re-fetch when date changes
 
   const createLeave = async (leaveData: LeaveFormData): Promise<void> => {
     try {

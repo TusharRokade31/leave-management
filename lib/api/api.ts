@@ -127,8 +127,14 @@ export const api = {
     return response.json();
   },
 
-  getAllDashboardLeaves: async (): Promise<Leave[]> => {
-    const response = await fetch(`/api/leave-dashboard`, {
+getAllDashboardLeaves: async (month?: number, year?: number): Promise<Leave[]> => {
+    // Append query params if they exist
+    let url = `/api/leave-dashboard`;
+    if (month && year) {
+      url += `?month=${month}&year=${year}`;
+    }
+
+    const response = await fetch(url, {
       headers: getAuthHeaders()
     });
     
@@ -138,7 +144,6 @@ export const api = {
     
     return response.json();
   },
-
 updateLeaveStatus: async (
     leaveId: number, 
     status: 'APPROVED' | 'REJECTED', 
@@ -174,8 +179,13 @@ updateLeaveStatus: async (
     }
   },
 
-  getStats: async (): Promise<Stats> => {
-    const response = await fetch(`/api/leaves/stats`, {
+  getStats: async (month?: number, year?: number): Promise<Stats> => {
+    let url = `/api/leaves/stats`;
+    if (month && year) {
+      url += `?month=${month}&year=${year}`;
+    }
+
+    const response = await fetch(url, {
       headers: getAuthHeaders()
     });
     
@@ -190,5 +200,5 @@ updateLeaveStatus: async (
       approved: parseInt(data.approved),
       wfh: parseInt(data.wfh),
     };
-  }
+  },
 };

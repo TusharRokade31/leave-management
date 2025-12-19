@@ -1,3 +1,4 @@
+// app/api/leave-dashboard/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
@@ -10,8 +11,34 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    // Get query params
+    const { searchParams } = new URL(req.url);
+    const month = searchParams.get('month');
+    const year = searchParams.get('year');
+
+    // Build Date Filter
+    let dateFilter = {};
+    if (month && year) {
+      const m = parseInt(month);
+      const y = parseInt(year);
+      
+      const startOfMonth = new Date(y, m - 1, 1);
+      const endOfMonth = new Date(y, m, 0, 23, 59, 59);
+      
+      // Find leaves that overlap with the selected month
+      dateFilter = {
+        AND: [
+          { startDate: { lte: endOfMonth } },
+          { endDate: { gte: startOfMonth } }
+        ]
+      };
+    }
+
     const leaves = await prisma.leave.findMany({
-      where: { status: 'APPROVED' },
+      where: { 
+        status: 'APPROVED',
+        ...dateFilter
+      },
       orderBy: { startDate: 'asc' },
       include: {
         user: {
