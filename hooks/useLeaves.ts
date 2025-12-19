@@ -15,7 +15,7 @@ interface UseLeavesReturn {
 export const useLeaves = (currentUser: User | null): UseLeavesReturn => {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, approved: 0 });
+  const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, approved: 0, wfh: 0 });
 
   const fetchLeaves = async (): Promise<void> => {
     if (!currentUser) return;

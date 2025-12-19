@@ -187,7 +187,8 @@ updateLeaveStatus: async (
     return {
       total: parseInt(data.total),
       pending: parseInt(data.pending),
-      approved: parseInt(data.approved)
+      approved: parseInt(data.approved),
+      wfh: parseInt(data.wfh),
     };
   }
 };
