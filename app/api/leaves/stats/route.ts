@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
-import { LeaveType } from '@prisma/client';
+import { LeaveType, LeaveStatus } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,14 +36,16 @@ export async function GET(req: NextRequest) {
       ...dateFilter
     };
 
-    const leaveWhere = { 
+   const leaveWhere = { 
       ...commonWhere, 
       type: { not: LeaveType.WORK_FROM_HOME } 
     };
     
+    // MODIFY THIS BLOCK
     const wfhWhere = { 
       ...commonWhere, 
-      type: LeaveType.WORK_FROM_HOME 
+      type: LeaveType.WORK_FROM_HOME,
+      status: LeaveStatus.APPROVED  // <--- Use the Enum here
     };
 
     const [total, pending, approved, rejected, wfh] = await Promise.all([
