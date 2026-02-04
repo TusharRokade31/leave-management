@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 
 const EmployeeCalendar = () => {
-  const { user } = useAuth();
+  const { currentUser } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [tasks, setTasks] = useState<Record<string, string>>({});
   const [leaves, setLeaves] = useState<any[]>([]);
