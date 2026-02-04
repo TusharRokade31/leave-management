@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { sendWelcomeEmail } from '@/lib/welcomeemail';
 import { parse } from 'csv-parse/sync';
+import { authenticateToken } from '@/lib/auth';
 
 
 // Generate random password
@@ -113,5 +114,22 @@ export async function POST(req: NextRequest) {
       { error: 'Server error' },
       { status: 500 }
     );
+  }
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const authUser = authenticateToken(req);
+
+    // Only managers should be able to fetch the full employee list
+    if (authUser.role !== 'MANAGER') {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    const employees = await prisma.user.findMany();
+
+    return NextResponse.json(employees);
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

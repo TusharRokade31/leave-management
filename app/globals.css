@@ -139,3 +139,16 @@
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
 }
+
+/* Custom Calendar Markers */
+.tile-task {
+  background: #dcfce7 !important; /* Light Green */
+  color: #166534 !important;
+  border-radius: 8px;
+}
+
+.tile-leave {
+  background: #fee2e2 !important; /* Light Red */
+  color: #991b1b !important;
+  border-radius: 8px;
+}

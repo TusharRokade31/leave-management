@@ -1,114 +1,113 @@
+"use client";
 import React, { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format } from 'date-fns';
-import { useAuth } from '@/hooks/useAuth';
+import { X, Save } from 'lucide-react';
 
-const EmployeeCalendar = () => {
-  const { currentUser } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+interface Props {
+  viewOnly?: boolean;
+  employeeId?: number;
+}
+
+export const EmployeeCalendar = ({ viewOnly = false, employeeId }: Props) => {
   const [tasks, setTasks] = useState<Record<string, string>>({});
-  const [leaves, setLeaves] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showModal, setShowModal] = useState(false);
   const [currentPointers, setCurrentPointers] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch existing tasks and leaves on mount
   useEffect(() => {
-    fetchData();
-  }, []);
+    const fetchTasks = async () => {
+      const url = employeeId ? `/api/tasks?userId=${employeeId}` : '/api/tasks';
+      const res = await fetch(url);
+      const data = await res.json();
+      const taskMap = data.reduce((acc: any, t: any) => ({
+        ...acc,
+        [format(new Date(t.date), 'yyyy-MM-dd')]: t.content
+      }), {});
+      setTasks(taskMap);
+    };
+    fetchTasks();
+  }, [employeeId]);
 
-  const fetchData = async () => {
-    const [tasksRes, leavesRes] = await Promise.all([
-      fetch('/api/tasks'),
-      fetch('/api/leaves/my-leaves')
-    ]);
-    const tasksData = await tasksRes.json();
-    const leavesData = await leavesRes.json();
-    
-    // Map tasks to a date-keyed object for easy lookup
-    const taskMap = tasksData.reduce((acc: any, task: any) => {
-      acc[format(new Date(task.date), 'yyyy-MM-dd')] = task.content;
-      return acc;
-    }, {});
-    
-    setTasks(taskMap);
-    setLeaves(leavesData);
+  const handleDayClick = (date: Date) => {
+    const dateKey = format(date, 'yyyy-MM-dd');
+    setSelectedDate(date);
+    setCurrentPointers(tasks[dateKey] || '');
+    setShowModal(true);
   };
 
-  const handleSaveTask = async () => {
+  const handleSave = async () => {
+    setIsSaving(true);
     const dateKey = format(selectedDate, 'yyyy-MM-dd');
-    const response = await fetch('/api/tasks', {
+    const res = await fetch('/api/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date: dateKey, content: currentPointers }),
     });
-
-    if (response.ok) {
-      setTasks({ ...tasks, [dateKey]: currentPointers });
-      alert('Task saved successfully!');
+    if (res.ok) {
+      setTasks(prev => ({ ...prev, [dateKey]: currentPointers }));
+      setShowModal(false);
     }
-  };
-
-  // Logic for color-coding the calendar tiles
-  const getTileClassName = ({ date, view }: { date: Date, view: string }) => {
-    if (view !== 'month') return '';
-    
-    const dateKey = format(date, 'yyyy-MM-dd');
-    
-    // Check if date is within a leave period
-    const isOnLeave = leaves.some(leave => {
-      const start = new Date(leave.startDate);
-      const end = new Date(leave.endDate);
-      return date >= start && date <= end && leave.status === 'APPROVED';
-    });
-
-    if (isOnLeave) return 'bg-red-200 text-red-800 rounded-full'; // Leave style
-    if (tasks[dateKey]) return 'bg-green-200 text-green-800 rounded-full'; // Task filled style
-    
-    return '';
+    setIsSaving(false);
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto bg-white rounded-xl shadow-md">
-      <h2 className="text-2xl font-bold mb-4">My Attendance & Daily Tasks</h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <Calendar
-            onChange={(d) => {
-              const date = d as Date;
-              setSelectedDate(date);
-              setCurrentPointers(tasks[format(date, 'yyyy-MM-dd')] || '');
-            }}
-            value={selectedDate}
-            tileClassName={getTileClassName}
-            className="border-none shadow-sm rounded-lg"
-          />
-          <div className="mt-4 flex gap-4 text-sm">
-            <span className="flex items-center"><div className="w-3 h-3 bg-green-200 mr-2"></div> Task Filled</span>
-            <span className="flex items-center"><div className="w-3 h-3 bg-red-200 mr-2"></div> On Leave</span>
+    <div className="bg-white p-4 rounded-xl shadow-sm border">
+      <Calendar
+        onClickDay={handleDayClick}
+        tileClassName={({ date }) => 
+          tasks[format(date, 'yyyy-MM-dd')] ? 'bg-green-100 text-green-800 font-bold rounded-lg' : ''
+        }
+        className="border-none w-full"
+      />
+
+      {/* Task Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-900">
+                  {format(selectedDate, 'dd MMMM yyyy')}
+                </h3>
+                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Daily Task Pointers
+              </label>
+              <textarea
+                className="w-full h-48 p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none transition-all"
+                placeholder={viewOnly ? "No tasks logged for this day." : "• Worked on login API\n• Fixed CSS issues..."}
+                value={currentPointers}
+                readOnly={viewOnly}
+                onChange={(e) => setCurrentPointers(e.target.value)}
+              />
+
+              <div className="mt-6 flex gap-3">
+                <button 
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition"
+                >
+                  {viewOnly ? "Close" : "Cancel"}
+                </button>
+                {!viewOnly && (
+                  <button 
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 transition"
+                  >
+                    <Save className="w-4 h-4" /> {isSaving ? "Saving..." : "Save Pointers"}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-
-        <div className="flex flex-col">
-          <h3 className="font-semibold mb-2">
-            Tasks for {format(selectedDate, 'PPP')}
-          </h3>
-          <textarea
-            className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="• Enter daily task pointers here..."
-            value={currentPointers}
-            onChange={(e) => setCurrentPointers(e.target.value)}
-          />
-          <button
-            onClick={handleSaveTask}
-            className="mt-4 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition"
-          >
-            Save Daily Log
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
-
-export default EmployeeCalendar;

@@ -15,6 +15,8 @@ import { BulkUploadModal } from '@/components/BulkUploadModal';
 import { LoginForm } from '@/components/LoginForm';
 import { LeaveFormData } from '@/type/form';
 import LeaveTable from '@/components/LeaveTable';
+import { EmployeeCalendar } from '@/components/EmployeeCalendar';
+import { EmployeeTaskMonitor } from '@/components/EmployeeTaskMonitor';
 
 export default function Home() {
   const { currentUser, loading, login, otpLogin, logout } = useAuth();
@@ -65,6 +67,7 @@ export default function Home() {
             </div>
             {showLeaveForm && <LeaveForm onSubmit={handleLeaveSubmit} onCancel={() => setShowLeaveForm(false)} />}
             <EmployeeLeaveTable leaves={leaveHooks.leaves} onDelete={leaveHooks.deleteLeave} />
+            <EmployeeCalendar/>
            </div>
         )}
 
@@ -78,16 +81,26 @@ export default function Home() {
               </button>
             </div>
             
+            
             {/* Pass currentMonth and setCurrentMonth here */}
-            <ManagerLeaveTable 
-              leaves={leaveHooks.leaves}
-              currentMonth={currentMonth}
-              onMonthChange={setCurrentMonth}
-              onApprove={(id, comment) => leaveHooks.updateLeaveStatus(id, 'APPROVED', comment)}
-              onReject={(id, comment) => leaveHooks.updateLeaveStatus(id, 'REJECTED', comment)}
-            />
+           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+    {/* This is the new monitoring section */}
+    <EmployeeTaskMonitor />
+
+    <div className="mt-12 space-y-6">
+      <h2 className="text-xl font-bold text-gray-800">Pending Leave Approvals</h2>
+      <ManagerLeaveTable 
+        leaves={leaveHooks.leaves}
+        currentMonth={currentMonth}
+        onMonthChange={setCurrentMonth}
+        onApprove={(id, comment) => leaveHooks.updateLeaveStatus(id, 'APPROVED', comment)}
+        onReject={(id, comment) => leaveHooks.updateLeaveStatus(id, 'REJECTED', comment)}
+      />
+    </div>
+  </div>
           </div>
         )}
+        
 
         {/* Dashboard/Calendar Table */}
         {!leaveHooks.loading && currentUser.role === 'MANAGER' && (
