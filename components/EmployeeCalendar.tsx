@@ -22,6 +22,7 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
       const data = await res.json();
       const map: Record<string, string> = {};
       data?.forEach((t: any) => {
+        // Use format to ensure the key is a local date string
         map[format(new Date(t.date), "yyyy-MM-dd")] = t.content;
       });
       setTasks(map);
@@ -41,18 +42,26 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
     if (!canEditDate(selectedDate)) return;
     setIsSaving(true);
     const token = getAuthToken();
-    const normalized = new Date(selectedDate);
-    normalized.setHours(0, 0, 0, 0);
+
+    /* FIX: Instead of toISOString() which converts to UTC and can change the date,
+       we send the date formatted as a local YYYY-MM-DD string or ensure the 
+       hours are set to noon to avoid timezone "swing" back to the previous day.
+    */
+    const dateToSave = format(selectedDate, "yyyy-MM-dd");
 
     try {
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ date: normalized.toISOString(), content: currentPointers }),
+        body: JSON.stringify({ 
+          date: dateToSave, // Send formatted string to avoid ISO/UTC shifting
+          content: currentPointers 
+        }),
       });
 
       if (res.ok) {
         const updated = await res.json();
+        // Ensure the local state updates with the correct local key
         const dateKey = format(new Date(updated.date), "yyyy-MM-dd");
         setTasks((prev) => ({ ...prev, [dateKey]: updated.content }));
         setShowModal(false);
@@ -71,10 +80,7 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
         tileDisabled={({ date }) => !viewOnly && isFutureDate(date)}
         next2Label={null}
         prev2Label={null}
-        
-        /* THE FIX: Passing null stops the internal visual selection masking */
         value={null} 
-
         tileClassName={({ date, view }) => {
           if (view !== "month") return "";
           const key = format(date, "yyyy-MM-dd");
