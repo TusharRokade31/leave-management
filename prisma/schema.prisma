@@ -8,6 +8,41 @@ datasource db {
   directUrl = env("DIRECT_URL") // Optional: for migrations
 }
 
+/* =======================
+   ENUMS
+======================= */
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+}
+
+enum LeaveType {
+  FULL
+  HALF
+  EARLY
+  LATE
+  WORK_FROM_HOME
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  WFH
+  ABSENT
+  LEAVE
+  HOLIDAY
+}
+
+/* =======================
+   MODELS
+======================= */
+
 model User {
   id        Int      @id @default(autoincrement())
   name      String
@@ -16,6 +51,7 @@ model User {
   role      Role     @default(EMPLOYEE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   leaves    Leave[]
   tasks     Task[]
 
@@ -23,36 +59,39 @@ model User {
 }
 
 model Leave {
-  id            Int         @id @default(autoincrement())
-  userId        Int
-  startDate     DateTime
-  endDate       DateTime
-  startTime     String?
-  endTime       String?
-  reason        String      @db.Text
-  type          LeaveType   @default(FULL)
-  days          Int
-  status        LeaveStatus @default(PENDING)
-  managerComment String?    @db.Text  // Add this field
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             Int         @id @default(autoincrement())
+  userId         Int
+  startDate      DateTime
+  endDate        DateTime
+  startTime      String?
+  endTime        String?
+  reason         String      @db.Text
+  type           LeaveType   @default(FULL)
+  days           Int
+  status         LeaveStatus @default(PENDING)
+  managerComment String?     @db.Text
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
 }
 
 model Task {
-  id          Int      @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   userId      Int
-  date        DateTime @default(now())
-  content     String   @db.Text // Will store your "pointers"
-  isCompleted Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  content     String           @db.Text
+  status      AttendanceStatus @default(PRESENT)
+  isCompleted Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  @@unique([userId, date]) // Add this to allow editing specific dates
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date]) // One task per user per day
   @@index([date])
 }
 
@@ -64,23 +103,4 @@ model OTP {
   createdAt DateTime @default(now())
 
   @@index([email])
-}
-
-enum Role {
-  EMPLOYEE
-  MANAGER
-}
-
-enum LeaveType {
-  FULL
-  HALF
-  EARLY
-  LATE      // Added LATE for late coming
-  WORK_FROM_HOME // Added this
-}
-
-enum LeaveStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
