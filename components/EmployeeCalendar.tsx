@@ -4,6 +4,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format } from 'date-fns';
 import { X, Save } from 'lucide-react';
+import { getAuthToken } from '@/lib/api/api'; // Ensure this utility is imported
 
 interface Props {
   viewOnly?: boolean;
@@ -17,17 +18,30 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: Props) => {
   const [currentPointers, setCurrentPointers] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    const fetchTasks = async () => {
-      const url = employeeId ? `/api/tasks?userId=${employeeId}` : '/api/tasks';
-      const res = await fetch(url);
+  const fetchTasks = async () => {
+    const token = getAuthToken(); // Get the current token
+    const url = employeeId ? `/api/tasks?userId=${employeeId}` : '/api/tasks';
+    
+    try {
+      const res = await fetch(url, {
+        headers: { 
+          'Authorization': `Bearer ${token}` // Include token for authentication
+        }
+      });
       const data = await res.json();
-      const taskMap = data.reduce((acc: any, t: any) => ({
-        ...acc,
-        [format(new Date(t.date), 'yyyy-MM-dd')]: t.content
-      }), {});
-      setTasks(taskMap);
-    };
+      if (Array.isArray(data)) {
+        const taskMap = data.reduce((acc: any, t: any) => ({
+          ...acc,
+          [format(new Date(t.date), 'yyyy-MM-dd')]: t.content
+        }), {});
+        setTasks(taskMap);
+      }
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+    }
+  };
+
+  useEffect(() => {
     fetchTasks();
   }, [employeeId]);
 
@@ -40,70 +54,78 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: Props) => {
 
   const handleSave = async () => {
     setIsSaving(true);
-    const dateKey = format(selectedDate, 'yyyy-MM-dd');
-    const res = await fetch('/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({ date: dateKey, content: currentPointers }),
-    });
-    if (res.ok) {
-      setTasks(prev => ({ ...prev, [dateKey]: currentPointers }));
-      setShowModal(false);
+    const token = getAuthToken();
+
+    // Normalize date to midnight for the database unique constraint
+    const normalizedDate = new Date(selectedDate);
+    normalizedDate.setHours(0, 0, 0, 0);
+
+    try {
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // Include token
+        },
+        body: JSON.stringify({
+          date: normalizedDate.toISOString(),
+          content: currentPointers
+        }),
+      });
+
+      if (response.ok) {
+        const updatedTask = await response.json();
+        setTasks(prev => ({
+          ...prev,
+          [format(new Date(updatedTask.date), 'yyyy-MM-dd')]: updatedTask.content
+        }));
+        setShowModal(false);
+      }
+    } catch (error) {
+      console.error("Error saving task:", error);
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border">
-      <Calendar
+    <div className="bg-white p-6 rounded-2xl shadow-sm border">
+      <Calendar 
         onClickDay={handleDayClick}
-        tileClassName={({ date }) => 
-          tasks[format(date, 'yyyy-MM-dd')] ? 'bg-green-100 text-green-800 font-bold rounded-lg' : ''
-        }
-        className="border-none w-full"
+        tileClassName={({ date }) => {
+          const dateKey = format(date, 'yyyy-MM-dd');
+          return tasks[dateKey] ? 'bg-blue-100 text-blue-600 font-bold rounded-lg' : '';
+        }}
+        className="w-full border-none"
       />
 
-      {/* Task Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-900">
-                  {format(selectedDate, 'dd MMMM yyyy')}
-                </h3>
-                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Daily Task Pointers
-              </label>
-              <textarea
-                className="w-full h-48 p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none transition-all"
-                placeholder={viewOnly ? "No tasks logged for this day." : "• Worked on login API\n• Fixed CSS issues..."}
-                value={currentPointers}
-                readOnly={viewOnly}
-                onChange={(e) => setCurrentPointers(e.target.value)}
-              />
-
-              <div className="mt-6 flex gap-3">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold">Tasks for {format(selectedDate, 'MMM dd, yyyy')}</h3>
+              <button onClick={() => setShowModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <textarea
+              className="w-full h-48 p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              placeholder={viewOnly ? "No tasks logged." : "What did you work on?"}
+              value={currentPointers}
+              readOnly={viewOnly}
+              onChange={(e) => setCurrentPointers(e.target.value)}
+            />
+            <div className="mt-6 flex gap-3">
+              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border rounded-xl">
+                {viewOnly ? "Close" : "Cancel"}
+              </button>
+              {!viewOnly && (
                 <button 
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition"
+                  onClick={handleSave} 
+                  disabled={isSaving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl flex items-center justify-center gap-2"
                 >
-                  {viewOnly ? "Close" : "Cancel"}
+                  <Save className="w-4 h-4" /> {isSaving ? "Saving..." : "Save"}
                 </button>
-                {!viewOnly && (
-                  <button 
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 transition"
-                  >
-                    <Save className="w-4 h-4" /> {isSaving ? "Saving..." : "Save Pointers"}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
         </div>

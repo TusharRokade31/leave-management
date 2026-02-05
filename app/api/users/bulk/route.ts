@@ -126,7 +126,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const employees = await prisma.user.findMany();
+    const employees = await prisma.user.findMany({
+      where: {
+        role: 'EMPLOYEE',
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+      orderBy: { name: 'asc' },
+    });
 
     return NextResponse.json(employees);
   } catch (err: any) {

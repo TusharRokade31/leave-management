@@ -7,23 +7,28 @@ export async function POST(req: NextRequest) {
     const authUser = authenticateToken(req);
     const { date, content } = await req.json();
 
+    // Normalize date to midnight to match the @@unique constraint
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+
     const task = await prisma.task.upsert({
       where: {
         userId_date: {
           userId: authUser.id,
-          date: new Date(date),
+          date: normalizedDate,
         },
       },
       update: { content },
       create: {
         userId: authUser.id,
-        date: new Date(date),
+        date: normalizedDate,
         content,
       },
     });
 
     return NextResponse.json(task);
   } catch (err: any) {
+    console.error(err); // Log the actual error for debugging
     return NextResponse.json({ error: 'Failed to save task' }, { status: 500 });
   }
 }
