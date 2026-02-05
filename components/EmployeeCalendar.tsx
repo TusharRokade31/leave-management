@@ -1,131 +1,134 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
-import { format } from 'date-fns';
-import { X, Save } from 'lucide-react';
-import { getAuthToken } from '@/lib/api/api'; // Ensure this utility is imported
+import React, { useState, useEffect } from "react";
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
+import { format, isSameDay } from "date-fns";
+import { X, Calendar as CalendarIcon, Save, AlertTriangle } from "lucide-react";
+import { getAuthToken } from "@/lib/api/api";
+import { canEditDate, isFutureDate } from "@/utils/date";
 
-interface Props {
-  viewOnly?: boolean;
-  employeeId?: number;
-}
-
-export const EmployeeCalendar = ({ viewOnly = false, employeeId }: Props) => {
+export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: boolean; employeeId?: number }) => {
   const [tasks, setTasks] = useState<Record<string, string>>({});
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showModal, setShowModal] = useState(false);
-  const [currentPointers, setCurrentPointers] = useState('');
+  const [currentPointers, setCurrentPointers] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const fetchTasks = async () => {
-    const token = getAuthToken(); // Get the current token
-    const url = employeeId ? `/api/tasks?userId=${employeeId}` : '/api/tasks';
-    
     try {
-      const res = await fetch(url, {
-        headers: { 
-          'Authorization': `Bearer ${token}` // Include token for authentication
-        }
-      });
+      const token = getAuthToken();
+      const url = employeeId ? `/api/tasks?userId=${employeeId}` : "/api/tasks";
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-      if (Array.isArray(data)) {
-        const taskMap = data.reduce((acc: any, t: any) => ({
-          ...acc,
-          [format(new Date(t.date), 'yyyy-MM-dd')]: t.content
-        }), {});
-        setTasks(taskMap);
-      }
-    } catch (error) {
-      console.error("Error fetching tasks:", error);
-    }
+      const map: Record<string, string> = {};
+      data?.forEach((t: any) => {
+        map[format(new Date(t.date), "yyyy-MM-dd")] = t.content;
+      });
+      setTasks(map);
+    } catch (e) { console.error(e); }
   };
 
-  useEffect(() => {
-    fetchTasks();
-  }, [employeeId]);
+  useEffect(() => { fetchTasks(); }, [employeeId]);
 
   const handleDayClick = (date: Date) => {
-    const dateKey = format(date, 'yyyy-MM-dd');
+    if (!viewOnly && isFutureDate(date)) return;
     setSelectedDate(date);
-    setCurrentPointers(tasks[dateKey] || '');
+    setCurrentPointers(tasks[format(date, "yyyy-MM-dd")] || "");
     setShowModal(true);
   };
 
   const handleSave = async () => {
+    if (!canEditDate(selectedDate)) return;
     setIsSaving(true);
     const token = getAuthToken();
-
-    // Normalize date to midnight for the database unique constraint
-    const normalizedDate = new Date(selectedDate);
-    normalizedDate.setHours(0, 0, 0, 0);
+    const normalized = new Date(selectedDate);
+    normalized.setHours(0, 0, 0, 0);
 
     try {
-      const response = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // Include token
-        },
-        body: JSON.stringify({
-          date: normalizedDate.toISOString(),
-          content: currentPointers
-        }),
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ date: normalized.toISOString(), content: currentPointers }),
       });
 
-      if (response.ok) {
-        const updatedTask = await response.json();
-        setTasks(prev => ({
-          ...prev,
-          [format(new Date(updatedTask.date), 'yyyy-MM-dd')]: updatedTask.content
-        }));
+      if (res.ok) {
+        const updated = await res.json();
+        const dateKey = format(new Date(updated.date), "yyyy-MM-dd");
+        setTasks((prev) => ({ ...prev, [dateKey]: updated.content }));
         setShowModal(false);
       }
     } catch (error) {
-      console.error("Error saving task:", error);
+      console.error("Save failed:", error);
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border">
-      <Calendar 
+    <div className="calendar-card-container-wide">
+      <Calendar
         onClickDay={handleDayClick}
-        tileClassName={({ date }) => {
-          const dateKey = format(date, 'yyyy-MM-dd');
-          return tasks[dateKey] ? 'bg-blue-100 text-blue-600 font-bold rounded-lg' : '';
+        tileDisabled={({ date }) => !viewOnly && isFutureDate(date)}
+        next2Label={null}
+        prev2Label={null}
+        
+        /* THE FIX: Passing null stops the internal visual selection masking */
+        value={null} 
+
+        tileClassName={({ date, view }) => {
+          if (view !== "month") return "";
+          const key = format(date, "yyyy-MM-dd");
+          let classes = "custom-tile ";
+
+          if (isSameDay(date, new Date())) return classes + "tile-today-focus";
+          if (tasks[key]) return classes + "ring-task-inserted";
+
+          return classes;
         }}
-        className="w-full border-none"
+        className="minimal-white-calendar-wide"
       />
 
+      <div className="mt-8 flex flex-wrap justify-center gap-x-8 gap-y-4 border-t border-gray-100 pt-6">
+        <Legend color="border-blue-600 border-[2px]" label="Today" />
+        <Legend color="border-red-500 border-[1.5px]" label="Task Logged" />
+      </div>
+
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold">Tasks for {format(selectedDate, 'MMM dd, yyyy')}</h3>
-              <button onClick={() => setShowModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
-            </div>
-            <textarea
-              className="w-full h-48 p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-              placeholder={viewOnly ? "No tasks logged." : "What did you work on?"}
-              value={currentPointers}
-              readOnly={viewOnly}
-              onChange={(e) => setCurrentPointers(e.target.value)}
-            />
-            <div className="mt-6 flex gap-3">
-              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border rounded-xl">
-                {viewOnly ? "Close" : "Cancel"}
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-blue-900/40 backdrop-blur-sm" onClick={() => setShowModal(false)} />
+          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="relative bg-gradient-to-br from-blue-600 to-blue-800 p-8 text-white">
+              <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-all z-50 cursor-pointer">
+                <X size={20} strokeWidth={3} />
               </button>
-              {!viewOnly && (
-                <button 
-                  onClick={handleSave} 
-                  disabled={isSaving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl flex items-center justify-center gap-2"
-                >
-                  <Save className="w-4 h-4" /> {isSaving ? "Saving..." : "Save"}
-                </button>
+              <div className="flex items-center gap-3 mb-2 opacity-80">
+                <CalendarIcon size={16} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Update Schedule</span>
+              </div>
+              <h3 className="text-3xl font-black tracking-tight">{format(selectedDate, "MMMM dd")}</h3>
+            </div>
+            <div className="p-8">
+              {!viewOnly && !canEditDate(selectedDate) && (
+                <div className="mb-6 flex items-center gap-3 text-[10px] font-bold uppercase text-blue-800 bg-blue-50 border border-blue-100 p-4 rounded-2xl">
+                  <AlertTriangle size={16} /> 
+                  <span>Entry restricted for this date</span>
+                </div>
               )}
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase tracking-widest text-blue-400">Activity Pointers</label>
+                <textarea
+                  className="w-full h-40 bg-gray-50 border-2 border-transparent focus:border-blue-100 focus:bg-white rounded-2xl p-5 outline-none transition-all resize-none text-zinc-800 font-medium"
+                  readOnly={viewOnly || !canEditDate(selectedDate)}
+                  placeholder="Describe your work..."
+                  value={currentPointers}
+                  onChange={(e) => setCurrentPointers(e.target.value)}
+                />
+                {!viewOnly && canEditDate(selectedDate) && (
+                  <button onClick={handleSave} disabled={isSaving} className="flex items-center justify-center gap-3 w-full bg-blue-600 text-white font-bold py-5 rounded-2xl transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-30">
+                    <Save size={18} /> {isSaving ? "Saving..." : "Save Daily Log"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -133,3 +136,10 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: Props) => {
     </div>
   );
 };
+
+const Legend = ({ color, label }: { color: string; label: string }) => (
+  <div className="flex items-center gap-2">
+    <span className={`w-3 h-3 border-2 ${color} rounded-full`} />
+    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</span>
+  </div>
+);
