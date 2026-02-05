@@ -25,7 +25,7 @@ export function authenticateToken(req: NextRequest): AuthUser {
 }
 
 export function generateToken(userId: number, role: string): string {
-  return jwt.sign({ id: userId, role }, JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign({ id: userId, role }, JWT_SECRET, { expiresIn: '7d' });
 }
 
 export function verifyToken(token: string): AuthUser {
