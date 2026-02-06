@@ -25,7 +25,7 @@ export async function sendWelcomeEmail(
       <p><strong>Email:</strong> ${email}</p>
       <p><strong>Temporary Password:</strong> ${tempPassword}</p>
       <p>Please login and change your password immediately.</p>
-      <a href="${process.env.NEXT_PUBLIC_APP_URL}/login">Login Now</a>
+      <a href="${process.env.NEXT_PUBLIC_APP_URL}">Login Now</a>
     `,
   };
 
