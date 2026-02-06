@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useRef } from "react"; // Added useRef here
 import { Upload } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLeaves } from "@/hooks/useLeaves";
@@ -20,6 +20,14 @@ import { EmployeeTaskMonitor } from "@/components/EmployeeTaskMonitor";
 export default function Home() {
   const { currentUser, loading, login, otpLogin, logout } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // 1. Create the Ref for the target section
+  const taskMonitorRef = useRef<HTMLDivElement>(null);
+
+  // 2. Define the Scroll Function
+  const scrollToTaskMonitor = () => {
+    taskMonitorRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const leaveHooks = useLeaves(currentUser);
   const leavedashboard = useDashboardLeaves(currentUser, currentMonth);
@@ -48,7 +56,7 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-indigo-600 font-bold">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950 text-indigo-600 dark:text-indigo-400 font-bold transition-colors duration-300">
         Loading...
       </div>
     );
@@ -63,7 +71,7 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
+    <div className="min-h-screen bg-gray-50/50 dark:bg-slate-950 transition-colors duration-300">
       <Header
         currentUser={currentUser}
         onLogout={handleLogout}
@@ -74,22 +82,20 @@ export default function Home() {
       />
 
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-12">
-        {/* Top Summary Section */}
         <StatsCards stats={leavedashboard.stats} />
 
         {/* ================= EMPLOYEE VIEW ================= */}
         {!leaveHooks.loading && currentUser.role === "EMPLOYEE" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Side: Leave Table & Actions */}
             <div className="lg:col-span-7 space-y-6">
-              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                <h2 className="text-xl font-black tracking-tight text-gray-800">My Leave Requests</h2>
+              <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm transition-colors">
+                <h2 className="text-xl font-black tracking-tight text-gray-800 dark:text-white">My Leave Requests</h2>
                 <button
                   onClick={() => setShowLeaveForm(!showLeaveForm)}
                   className={`px-6 py-2 rounded-xl font-bold transition-all ${
                     showLeaveForm 
-                    ? "bg-gray-100 text-gray-500 hover:bg-gray-200" 
-                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100"
+                    ? "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700" 
+                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 dark:shadow-none"
                   }`}
                 >
                   {showLeaveForm ? "Cancel" : "Apply Leave"}
@@ -111,10 +117,11 @@ export default function Home() {
               />
             </div>
 
-            {/* Right Side: Personal Hollow Calendar */}
             <div className="lg:col-span-5">
-               <h2 className="text-xl font-black tracking-tight text-gray-800 mb-6">Work Status Calendar</h2>
-               <EmployeeCalendar />
+                <h2 className="text-xl font-black tracking-tight text-gray-800 dark:text-white mb-6">Work Status Calendar</h2>
+                <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-4 border border-gray-100 dark:border-slate-800 shadow-sm">
+                  <EmployeeCalendar />
+                </div>
             </div>
           </div>
         )}
@@ -123,22 +130,32 @@ export default function Home() {
         {!leaveHooks.loading && currentUser.role === "MANAGER" && (
           <div className="space-y-12">
             
-            {/* 1. Leave Management Section (Shifted Above) */}
             <div className="space-y-8">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-black tracking-tight text-gray-800">Leave Management</h2>
-                <button
-                  onClick={() => setShowBulkUpload(true)}
-                  className="px-6 py-2.5 bg-green-600 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-100"
-                >
-                  <Upload className="w-4 h-4" />
-                  Bulk Upload Users
-                </button>
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                <h2 className="text-2xl font-black tracking-tight text-gray-800 dark:text-white uppercase">
+                  Leave Management
+                </h2>
+                
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={scrollToTaskMonitor}
+                    className="px-6 py-2.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl flex items-center gap-2 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-all active:scale-95 shadow-sm"
+                  >
+                    Monitor Tasks ↓
+                  </button>
+
+                  <button
+                    onClick={() => setShowBulkUpload(true)}
+                    className="px-6 py-2.5 bg-green-600 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-100 dark:shadow-none active:scale-95"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Bulk Upload Users
+                  </button>
+                </div>
               </div>
 
-              {/* Pending Approvals Grid */}
-              <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm space-y-6">
-                <h3 className="text-lg font-bold text-gray-700">Awaiting Action</h3>
+              <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-gray-100 dark:border-slate-800 shadow-sm space-y-6 transition-colors">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-slate-300">Awaiting Action</h3>
                 <ManagerLeaveTable
                   leaves={leaveHooks.leaves}
                   currentMonth={currentMonth}
@@ -152,9 +169,8 @@ export default function Home() {
                 />
               </div>
 
-              {/* Monthly Overview Section */}
-              <div className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm space-y-6">
-                <h3 className="text-lg font-bold text-gray-700">Full Month Attendance History</h3>
+              <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-gray-100 dark:border-slate-800 shadow-sm space-y-6 transition-colors">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-slate-300">Full Month Attendance History</h3>
                 <LeaveTable
                   leaves={leavedashboard.leaves}
                   currentMonth={currentMonth}
@@ -163,17 +179,16 @@ export default function Home() {
               </div>
             </div>
 
-            <hr className="border-gray-100" />
+            <hr className="border-gray-100 dark:border-slate-800" />
 
-            {/* 2. Employee Task Monitoring Section (Shifted Below) */}
-            <div className="space-y-6">
+            {/* 3. Attached Ref here for scrolling */}
+            <div ref={taskMonitorRef} className="space-y-6 scroll-mt-10">
                <EmployeeTaskMonitor />
             </div>
           </div>
         )}
       </div>
 
-      {/* Overlays */}
       {showNotifications && currentUser.role === "MANAGER" && (
         <NotificationPanel
           recentRequests={pendingLeaves}

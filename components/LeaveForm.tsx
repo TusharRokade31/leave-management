@@ -1,4 +1,3 @@
-// LeaveForm.tsx
 import React, { useState } from 'react';
 import { Calendar } from 'lucide-react';
 import DatePicker from 'react-datepicker';
@@ -21,14 +20,12 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
   });
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Convert string to Date object
   const stringToDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
     const date = new Date(dateStr);
     return isNaN(date.getTime()) ? null : date;
   };
 
-  // Convert Date object to YYYY-MM-DD string
   const dateToString = (date: Date | null): string => {
     if (!date) return '';
     const year = date.getFullYear();
@@ -43,7 +40,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
       return;
     }
 
-    // Validate time for specific leave types
     if (['HALF', 'EARLY', 'LATE'].includes(formData.type) && !formData.startTime) {
       alert('Please select time for this leave type');
       return;
@@ -92,29 +88,34 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
   const showTimeFields = ['HALF', 'EARLY', 'LATE'].includes(formData.type);
   const showEndTime = formData.type === 'HALF';
 
+  // Common input styles for theme sync
+  const inputClasses = "w-full px-4 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100 dark:disabled:bg-slate-900 dark:text-white transition-colors outline-none";
+
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">New Leave Request</h3>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-slate-800 transition-colors duration-300">
+      <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6 uppercase tracking-tight">New Leave Request</h3>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-2">
               Start Date <span className="text-red-500">*</span>
             </label>
-            <DatePicker
-              selected={stringToDate(formData.startDate)}
-              onChange={handleStartDateChange}
-              dateFormat="dd/MM/yyyy"
-              placeholderText="DD/MM/YYYY"
-              disabled={isSubmitting}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100"
-              showYearDropdown
-              showMonthDropdown
-              dropdownMode="select"
-            />
+            <div className="relative">
+              <DatePicker
+                selected={stringToDate(formData.startDate)}
+                onChange={handleStartDateChange}
+                dateFormat="dd/MM/yyyy"
+                placeholderText="DD/MM/YYYY"
+                disabled={isSubmitting}
+                className={inputClasses}
+                showYearDropdown
+                showMonthDropdown
+                dropdownMode="select"
+              />
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-2">
               End Date <span className="text-red-500">*</span>
             </label>
             <DatePicker
@@ -122,9 +123,9 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
               onChange={handleEndDateChange}
               dateFormat="dd/MM/yyyy"
               placeholderText="DD/MM/YYYY"
-               minDate={stringToDate(formData.startDate) || undefined}
+              minDate={stringToDate(formData.startDate) || undefined}
               disabled={!formData.startDate || isSubmitting}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className={inputClasses}
               showYearDropdown
               showMonthDropdown
               dropdownMode="select"
@@ -133,14 +134,14 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-2">
             Leave Type <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.type}
             onChange={(e) => handleTypeChange(e.target.value as LeaveFormData['type'])}
             disabled={isSubmitting}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100"
+            className={inputClasses}
           >
             <option value="FULL">Full Day Leave</option>
             <option value="HALF">Half Day Leave</option>
@@ -151,9 +152,9 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
         </div>
 
         {showTimeFields && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400 mb-2">
                 {formData.type === 'HALF' ? 'Start Time' : 
                  formData.type === 'EARLY' ? 'Leave Time' : 
                  'Arrival Time'} <span className="text-red-500">*</span>
@@ -163,13 +164,13 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
                 value={formData.startTime}
                 onChange={(e) => setFormData({...formData, startTime: e.target.value})}
                 disabled={isSubmitting}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100"
+                className={inputClasses}
               />
             </div>
             
             {showEndTime && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400 mb-2">
                   End Time <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -177,7 +178,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
                   value={formData.endTime}
                   onChange={(e) => setFormData({...formData, endTime: e.target.value})}
                   disabled={isSubmitting}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100"
+                  className={inputClasses}
                 />
               </div>
             )}
@@ -185,7 +186,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-2">
             Reason <span className="text-red-500">*</span>
           </label>
           <textarea
@@ -193,23 +194,23 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
             onChange={(e) => setFormData({...formData, reason: e.target.value})}
             disabled={isSubmitting}
             placeholder="Please provide a reason for your leave request"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100"
+            className={`${inputClasses} resize-none`}
             rows={3}
           />
         </div>
 
-        <div className="flex space-x-3">
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex-1 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:bg-indigo-400 disabled:cursor-not-allowed"
+            className="flex-1 bg-indigo-600 text-white py-4 rounded-xl hover:bg-indigo-700 transition-all font-bold shadow-lg shadow-indigo-200 dark:shadow-none disabled:bg-indigo-400 active:scale-[0.98]"
           >
-            {isSubmitting ? 'Submitting...' : 'Submit Leave Request'}
+            {isSubmitting ? 'Submitting...' : 'Submit Request'}
           </button>
           <button
             onClick={onCancel}
             disabled={isSubmitting}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:bg-gray-100"
+            className="px-8 py-4 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-all font-bold"
           >
             Cancel
           </button>
