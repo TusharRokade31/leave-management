@@ -475,10 +475,14 @@ const DayDetailModal: React.FC<{ detail: DayDetail; onClose: () => void }> = ({ 
                     {detail.task.isCompleted ? 'Yes' : 'No'}
                   </span>
                 </div>
-                <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
+                {/* <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
                   <span className="text-gray-600 dark:text-slate-400 font-bold block mb-1">Task Content:</span>
                   <p className="text-gray-900 dark:text-slate-200">{detail.task.content}</p>
-                </div>
+                </div> */}
+                <div 
+                    className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 p-3 rounded-lg border border-gray-100 dark:border-slate-700"
+                    dangerouslySetInnerHTML={{ __html: detail.task.content }} 
+                  />
                 {detail.task.managerComment && (
                   <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
                     <span className="text-gray-600 dark:text-slate-400 font-bold block mb-1">Manager Comment:</span>
