@@ -1,12 +1,33 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, forwardRef, useImperativeHandle } from "react";
+import ReactDOM from "react-dom"; // Required for the patch
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import { format, isSameDay } from "date-fns";
+import { format, isSameDay, isBefore, startOfDay } from "date-fns";
 import { X, Calendar as CalendarIcon, Save, AlertTriangle, MessageSquare } from "lucide-react";
 import { getAuthToken } from "@/lib/api/api";
 import { canEditDate, isFutureDate } from "@/utils/date";
-import useSWR from "swr"; 
+import useSWR from "swr";
+
+// Dynamic import for React Quill to prevent SSR issues
+import dynamic from 'next/dynamic';
+const ReactQuill = dynamic(() => import('react-quill'), { 
+  ssr: false,
+  loading: () => <div className="h-48 w-full bg-gray-50 dark:bg-slate-800 animate-pulse rounded-xl border border-gray-200 dark:border-slate-700" />
+});
+import 'react-quill/dist/quill.snow.css';
+
+// --- REACT 19 COMPATIBILITY PATCH ---
+// React Quill uses findDOMNode which was removed in React 19.
+if (typeof window !== "undefined") {
+  // @ts-ignore
+  if (!ReactDOM.findDOMNode) {
+    // @ts-ignore
+    ReactDOM.findDOMNode = (instance) => {
+      return instance instanceof HTMLElement ? instance : null;
+    };
+  }
+}
 
 interface TaskData {
   content: string;
@@ -18,7 +39,7 @@ const fetcher = async (url: string) => {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error("Failed to fetch tasks");
   const data = await res.json();
-  
+
   const map: Record<string, TaskData> = {};
   data?.forEach((t: any) => {
     map[format(new Date(t.date), "yyyy-MM-dd")] = {
@@ -29,7 +50,7 @@ const fetcher = async (url: string) => {
   return map;
 };
 
-export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: boolean; employeeId?: number }) => {
+export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { viewOnly?: boolean; employeeId?: number }, ref) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showModal, setShowModal] = useState(false);
   const [currentPointers, setCurrentPointers] = useState("");
@@ -38,9 +59,15 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
 
   const url = employeeId ? `/api/tasks?userId=${employeeId}` : "/api/tasks";
   const { data: tasks = {}, mutate } = useSWR(url, fetcher, {
-    refreshInterval: 10000, 
+    refreshInterval: 10000,
     revalidateOnFocus: true,
   });
+
+  useImperativeHandle(ref, () => ({
+    openToday: () => {
+      handleDayClick(new Date());
+    }
+  }));
 
   const handleDayClick = (date: Date) => {
     if (!viewOnly && isFutureDate(date)) return;
@@ -66,12 +93,12 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
           date: dateToSave,
           content: viewOnly ? undefined : currentPointers,
           managerComment: viewOnly ? currentComment : undefined,
-          employeeId: employeeId 
+          employeeId: employeeId
         }),
       });
 
       if (res.ok) {
-        await mutate(); 
+        await mutate();
         setShowModal(false);
       }
     } catch (error) {
@@ -81,47 +108,53 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
     }
   };
 
+  const quillModules = {
+    toolbar: [
+      ['bold', 'italic', 'underline'],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+      ['clean']
+    ],
+  };
+
   return (
-    /* FIXED CONTAINER: background set to slate-900 (black-ish) in dark mode */
     <div className="w-full max-w-md mx-auto bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-[2.5rem] p-6 transition-colors duration-300 shadow-sm">
       
-      {/* Global Style Override to force transparency and theme colors */}
       <style jsx global>{`
         .dark .react-calendar {
           background-color: transparent !important;
           border: none !important;
           color: #f1f5f9 !important;
-          font-family: inherit;
         }
-        .dark .react-calendar__tile {
-          color: #94a3b8 !important;
-        }
-        .dark .react-calendar__tile:enabled:hover,
-        .dark .react-calendar__tile:enabled:focus {
+        .dark .react-calendar__tile { color: #94a3b8 !important; }
+        .dark .react-calendar__tile:enabled:hover {
           background-color: #1e293b !important;
           border-radius: 12px;
         }
-        .dark .react-calendar__navigation button {
-          color: #f1f5f9 !important;
-          min-width: 44px;
-          background: none;
+        .dark .react-calendar__navigation button { color: #f1f5f9 !important; background: none; }
+        
+        /* State Visuals */
+        .task-added { background-color: #2563eb !important; color: white !important; border-radius: 12px !important; }
+        .task-missing { background-color: #ef4444 !important; color: white !important; border-radius: 12px !important; }
+        .tile-today-focus { border: 2px solid #2563eb !important; border-radius: 12px !important; }
+
+        /* Quill Theme Overrides */
+        .dark .ql-toolbar { 
+          background: #1e293b; 
+          border-color: #334155 !important; 
+          border-top-left-radius: 12px; 
+          border-top-right-radius: 12px; 
         }
-        .dark .react-calendar__navigation button:enabled:hover,
-        .dark .react-calendar__navigation button:enabled:focus {
-          background-color: #1e293b !important;
+        .dark .ql-container { 
+          background: #0f172a; 
+          border-color: #334155 !important; 
+          border-bottom-left-radius: 12px; 
+          border-bottom-right-radius: 12px; 
+          color: #f1f5f9; 
         }
-        .dark .react-calendar__month-view__weekdays__weekday abbr {
-          text-decoration: none;
-          color: #64748b !important;
-          font-weight: 800;
-          font-size: 0.75rem;
-        }
-        /* Prevents white background on the active/selected tile */
-        .dark .react-calendar__tile--active {
-          background: #3b82f6 !important;
-          color: white !important;
-          border-radius: 12px;
-        }
+        .dark .ql-stroke { stroke: #94a3b8 !important; }
+        .dark .ql-fill { fill: #94a3b8 !important; }
+        .dark .ql-picker { color: #94a3b8 !important; }
+        .ql-editor { min-height: 200px; font-size: 16px; }
       `}</style>
 
       <div className="flex justify-center">
@@ -134,10 +167,14 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
           tileClassName={({ date, view }) => {
             if (view !== "month") return "";
             const key = format(date, "yyyy-MM-dd");
+            const hasTask = !!tasks[key]?.content;
+            const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
+            
             let classes = "custom-tile transition-all duration-200 ";
 
-            if (isSameDay(date, new Date())) return classes + "tile-today-focus ring-2 ring-blue-600 dark:ring-blue-400";
-            if (tasks[key]?.content) return classes + "ring-task-inserted border-b-2 border-red-500 dark:border-red-400";
+            if (isSameDay(date, new Date())) classes += "tile-today-focus ";
+            if (hasTask) classes += "task-added ";
+            else if (isPast && !viewOnly) classes += "task-missing ";
 
             return classes;
           }}
@@ -146,14 +183,15 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
       </div>
 
       <div className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3 border-t border-gray-100 dark:border-slate-800 pt-6">
-        <Legend color="border-blue-600 dark:border-blue-400 border-[2px]" label="Today" />
-        <Legend color="border-red-500 dark:border-red-400 border-[1.5px]" label="Task Logged" />
+        <Legend color="bg-blue-600" label="Logged" isFilled />
+        <Legend color="bg-red-500" label="Missing" isFilled />
+        <Legend color="border-blue-600 border-2" label="Today" />
       </div>
 
       {showModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 dark:bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-transparent dark:border-slate-800">
+          <div className="relative bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-transparent dark:border-slate-800">
             <div className="relative bg-gradient-to-br from-blue-600 to-blue-800 dark:from-indigo-900 dark:to-slate-900 p-8 text-white">
               <button 
                 onClick={() => setShowModal(false)} 
@@ -170,7 +208,7 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
               <h3 className="text-3xl font-black tracking-tight">{format(selectedDate, "MMMM dd")}</h3>
             </div>
             
-            <div className="p-8 space-y-6">
+            <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
               {!viewOnly && !canEditDate(selectedDate) && (
                 <div className="flex items-center gap-3 text-[10px] font-bold uppercase text-blue-800 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 p-4 rounded-2xl">
                   <AlertTriangle size={16} /> 
@@ -178,15 +216,18 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-blue-400 dark:text-blue-500">What did you work on?</label>
-                <textarea
-                  className="w-full h-32 bg-gray-50 dark:bg-slate-800 border-2 border-transparent focus:border-blue-100 dark:focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800 rounded-2xl p-5 outline-none transition-all resize-none text-zinc-800 dark:text-slate-200 font-medium placeholder-gray-400"
-                  readOnly={viewOnly || !canEditDate(selectedDate)}
-                  placeholder="Employee description..."
-                  value={currentPointers}
-                  onChange={(e) => setCurrentPointers(e.target.value)}
-                />
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-blue-400 dark:text-blue-500">Task Log</label>
+                <div className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-200 dark:border-slate-700 shadow-sm">
+                  <ReactQuill 
+                    theme="snow"
+                    value={currentPointers}
+                    onChange={setCurrentPointers}
+                    modules={quillModules}
+                    readOnly={viewOnly || !canEditDate(selectedDate)}
+                    placeholder="Describe what you worked on today..."
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -226,11 +267,13 @@ export const EmployeeCalendar = ({ viewOnly = false, employeeId }: { viewOnly?: 
       )}
     </div>
   );
-};
+});
 
-const Legend = ({ color, label }: { color: string; label: string }) => (
+EmployeeCalendar.displayName = "EmployeeCalendar";
+
+const Legend = ({ color, label, isFilled = false }: { color: string; label: string; isFilled?: boolean }) => (
   <div className="flex items-center gap-2">
-    <span className={`w-3 h-3 border-2 ${color} rounded-full`} />
+    <span className={`w-3 h-3 rounded-full ${color} ${!isFilled ? 'bg-transparent' : ''}`} />
     <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-slate-500 transition-colors">{label}</span>
   </div>
 );

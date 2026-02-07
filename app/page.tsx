@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useRef } from "react"; // Added useRef here
+import React, { useState, useRef } from "react"; 
 import { Upload } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLeaves } from "@/hooks/useLeaves";
@@ -21,10 +21,11 @@ export default function Home() {
   const { currentUser, loading, login, otpLogin, logout } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // 1. Create the Ref for the target section
+  // Refs
   const taskMonitorRef = useRef<HTMLDivElement>(null);
+  const calendarRef = useRef<any>(null); // Added for the Today button logic
 
-  // 2. Define the Scroll Function
+  // Scroll Function
   const scrollToTaskMonitor = () => {
     taskMonitorRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -87,15 +88,18 @@ export default function Home() {
         {/* ================= EMPLOYEE VIEW ================= */}
         {!leaveHooks.loading && currentUser.role === "EMPLOYEE" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Left Column: Leave Requests */}
             <div className="lg:col-span-7 space-y-6">
               <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm transition-colors">
-                <h2 className="text-xl font-black tracking-tight text-gray-800 dark:text-white">My Leave Requests</h2>
+                <h2 className="text-xl font-black tracking-tight text-gray-800 dark:text-white">
+                  My Leave Requests
+                </h2>
                 <button
                   onClick={() => setShowLeaveForm(!showLeaveForm)}
                   className={`px-6 py-2 rounded-xl font-bold transition-all ${
-                    showLeaveForm 
-                    ? "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700" 
-                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 dark:shadow-none"
+                    showLeaveForm
+                      ? "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700"
+                      : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 dark:shadow-none"
                   }`}
                 >
                   {showLeaveForm ? "Cancel" : "Apply Leave"}
@@ -117,11 +121,24 @@ export default function Home() {
               />
             </div>
 
-            <div className="lg:col-span-5">
-                <h2 className="text-xl font-black tracking-tight text-gray-800 dark:text-white mb-6">Work Status Calendar</h2>
-                <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-4 border border-gray-100 dark:border-slate-800 shadow-sm">
-                  <EmployeeCalendar />
-                </div>
+            {/* Right Column: Calendar */}
+            <div className="lg:col-span-5 space-y-6">
+              <div className="flex justify-between items-center h-[74px] bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm transition-colors">
+                <h2 className="text-xl font-black tracking-tight text-gray-800 dark:text-white">
+                  Work Status Calendar
+                </h2>
+                <button
+      onClick={() => calendarRef.current?.openToday()}
+      className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold transition-all hover:bg-indigo-700 shadow-lg shadow-indigo-100 dark:shadow-none"
+    >
+      Update Today's Tasks
+    </button>
+     </div>
+
+              {/* Calendar Container */}
+              <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-4 border border-gray-100 dark:border-slate-800 shadow-sm">
+                <EmployeeCalendar ref={calendarRef} />
+              </div>
             </div>
           </div>
         )}
@@ -129,7 +146,6 @@ export default function Home() {
         {/* ================= MANAGER VIEW ================= */}
         {!leaveHooks.loading && currentUser.role === "MANAGER" && (
           <div className="space-y-12">
-            
             <div className="space-y-8">
               <div className="flex flex-wrap justify-between items-center gap-4">
                 <h2 className="text-2xl font-black tracking-tight text-gray-800 dark:text-white uppercase">
@@ -181,9 +197,8 @@ export default function Home() {
 
             <hr className="border-gray-100 dark:border-slate-800" />
 
-            {/* 3. Attached Ref here for scrolling */}
             <div ref={taskMonitorRef} className="space-y-6 scroll-mt-10">
-               <EmployeeTaskMonitor />
+                <EmployeeTaskMonitor />
             </div>
           </div>
         )}
