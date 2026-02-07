@@ -201,4 +201,21 @@ updateLeaveStatus: async (
       wfh: parseInt(data.wfh),
     };
   },
+
+ getEmployeeWorkStatus: async (month?: number, year?: number): Promise<any[]> => {
+  let url = `/api/employee-work-status`;
+  if (month && year) {
+    url += `?month=${month}&year=${year}`;
+  }
+
+  const response = await fetch(url, {
+    headers: getAuthHeaders()
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch employee work status');
+  }
+  
+  return response.json();
+},
 };
