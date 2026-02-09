@@ -499,9 +499,12 @@ const DayDetailModal: React.FC<{
                   <span className="text-gray-600 dark:text-slate-400 font-bold block mb-1">Task Content:</span>
                   {/* FIX 1: HTML Rendering */}
                   <div 
-                    className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 p-3 rounded-lg border border-gray-100 dark:border-slate-700"
-                    dangerouslySetInnerHTML={{ __html: detail.task.content }} 
-                  />
+                      className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 p-3 rounded-lg border border-gray-100 dark:border-slate-700
+                        [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2
+                        [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2
+                        [&_li]:my-1"
+                      dangerouslySetInnerHTML={{ __html: detail.task.content }} 
+                    />
                 </div>
 
                 {/* FIX 2: Manager Feedback Input */}
