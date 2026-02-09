@@ -15,6 +15,7 @@ import {
 import { getStatusIcon } from '../utils/getStatusIcon';
 import { formatDate } from '@/utils/formatDate';
 import { getStatusColor } from '@/utils/getStatusColors';
+import { toast } from 'react-toastify';
 
 
 interface ManagerLeaveTableProps {
@@ -114,7 +115,7 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
   const handleConfirmAction = async () => {
       if (!actionLeaveId || !currentAction) return;
       if (currentAction === 'reject' && !comment.trim()) {
-        alert('Please provide a comment when rejecting a leave request');
+        toast('Please provide a comment when rejecting a leave request');
         return;
       }
 

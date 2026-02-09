@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Leave management app by alphabeta solutions",
-  description: "Just a simple leave management app built with Next.js and Tailwind CSS",
+  title: "AlphaBeta management app by alphabeta solutions",
+  description: "Just a simple AlphaBeta management app built with Next.js and Tailwind CSS",
 };
 
 export default function RootLayout({

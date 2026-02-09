@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Calendar, CheckCircle2, XCircle, Clock, Home } from 'lucide-react';
+import { X, Calendar, CheckCircle2, XCircle, Clock, Home, MessageSquare } from 'lucide-react';
+import { getAuthToken } from '@/lib/api/api';
+import { toast } from 'react-toastify';
 
 interface Task {
   id: number;
@@ -46,12 +48,13 @@ interface EmployeeWorkStatusTableProps {
   employees: Employee[];
   currentMonth: Date;
   onMonthChange: (date: Date) => void;
+  onUpdateFeedback: (date: string, employeeId: number, comment: string) => Promise<boolean>; // New Prop
 }
-
 const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
   employees,
   currentMonth,
   onMonthChange,
+  onUpdateFeedback, // Destructure
 }) => {
   const [selectedDayDetail, setSelectedDayDetail] = useState<DayDetail | null>(null);
 
@@ -131,7 +134,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
               : { symbol: 'WFH/T✗', color: 'bg-blue-50 dark:bg-blue-950/30 text-blue-400 dark:text-blue-500' };
           } else {
             // WFH leave without task
-            return { symbol: 'WFH', color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300' };
+            return { symbol: 'WFH/T✗', color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300' };
           }
         
         case 'HALF':
@@ -142,7 +145,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
               : { symbol: 'HL/T✗', color: 'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-400 dark:text-yellow-500' };
           } else {
             // Half day leave without task
-            return { symbol: 'HL/A', color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-300' };
+            return { symbol: 'HL/T✗', color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-300' };
           }
         
         case 'EARLY':
@@ -153,7 +156,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
               : { symbol: 'EL/T✗', color: 'bg-purple-50 dark:bg-purple-950/30 text-purple-400 dark:text-purple-500' };
           } else {
             // Early going without task
-            return { symbol: 'EL/A', color: 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300' };
+            return { symbol: 'EL/T✗', color: 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300' };
           }
         
         case 'LATE':
@@ -164,7 +167,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
               : { symbol: 'LL/T✗', color: 'bg-pink-50 dark:bg-pink-950/30 text-pink-400 dark:text-pink-500' };
           } else {
             // Late coming without task
-            return { symbol: 'LL/A', color: 'bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-300' };
+            return { symbol: 'LL/T✗', color: 'bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-300' };
           }
         
         default:
@@ -209,7 +212,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
     } else if (task) {
       status = `${task.status} - Task ${task.isCompleted ? 'Completed' : 'Incomplete'}`;
     } else {
-      status = 'Absent (No Task Submitted)';
+      status = '(No Task Submitted)';
     }
 
     setSelectedDayDetail({
@@ -329,7 +332,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
             <LegendItem color="bg-green-100 dark:bg-green-900/40 text-green-600" label="Task Done" symbol="T✓" />
             {/* <LegendItem color="bg-green-50 dark:bg-green-950/30 text-green-400" label="Task Pending" symbol="T✗" /> */}
             <LegendItem color="bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600" label="WFH + Task ✓" symbol="WFH/T✓" />
-            <LegendItem color="bg-blue-100 dark:bg-blue-900/40 text-blue-600" label="WFH Leave" symbol="WFH" />
+            {/* <LegendItem color="bg-blue-100 dark:bg-blue-900/40 text-blue-600" label="WFH Leave" symbol="WFH" /> */}
             <LegendItem color="bg-orange-100 dark:bg-orange-900/40 text-orange-600" label="Full Leave" symbol="FL" />
             <LegendItem color="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600" label="Half + Task" symbol="HL/T✓" />
             <LegendItem color="bg-purple-100 dark:bg-purple-900/40 text-purple-600" label="Early + Task" symbol="EL/T✓" />
@@ -342,8 +345,12 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
 
       {/* Detail Modal */}
       {selectedDayDetail && (
-        <DayDetailModal detail={selectedDayDetail} onClose={() => setSelectedDayDetail(null)} />
-      )}
+      <DayDetailModal 
+        detail={selectedDayDetail} 
+        onClose={() => setSelectedDayDetail(null)} 
+        onUpdateFeedback={onUpdateFeedback} // Pass down
+      />
+    )}
     </div>
   );
 };
@@ -361,14 +368,55 @@ const LegendItem = ({ color, label, symbol }: { color: string; label: string; sy
 );
 
 // Day Detail Modal Component (same as before)
-const DayDetailModal: React.FC<{ detail: DayDetail; onClose: () => void }> = ({ detail, onClose }) => {
+const DayDetailModal: React.FC<{ 
+  detail: DayDetail; 
+  onClose: () => void;
+  onUpdateFeedback: (date: string, employeeId: number, comment: string) => Promise<boolean>;
+}> = ({ detail, onClose, onUpdateFeedback }) => {
+  const [comment, setComment] = useState(detail.task?.managerComment || "");
+  const [isSaving, setIsSaving] = useState(false);
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('default', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
+  };
+
+  const handleSaveComment = async () => {
+   if (!detail.task) return;
+    setIsSaving(true);
+    
+    const success = await onUpdateFeedback(detail.date, detail.employee.user.id, comment);
+    
+    if (success) {
+      onClose(); // Data is already refreshed by the hook
+    } else {
+      toast.error("Failed to save feedback");
+    }
+    setIsSaving(false);
+    
+    try {
+      const token = getAuthToken();
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          date: detail.date,
+          employeeId: detail.employee.user.id,
+          managerComment: comment, // Sending the updated comment
+        }),
+      });
+
+      if (res.ok) {
+        // Optional: You might want to trigger a refresh of the main table data here
+        toast.success("Feedback saved successfully!");
+        onClose();
+      }
+    } catch (error) {
+      console.error("Failed to save comment:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -441,54 +489,41 @@ const DayDetailModal: React.FC<{ detail: DayDetail; onClose: () => void }> = ({ 
 
           {/* Task Details */}
           {detail.task && (
-            <div className={`rounded-xl p-4 border ${
-              detail.task.isCompleted
-                ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900'
-                : 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900'
-            }`}>
+            <div className={`rounded-xl p-4 border ${detail.task.isCompleted ? 'bg-green-50 dark:bg-green-950/20 border-green-200' : 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200'}`}>
               <div className="flex items-center gap-2 mb-3">
-                {detail.task.isCompleted ? (
-                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                ) : (
-                  <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                )}
-                <h3 className={`text-sm font-black uppercase ${
-                  detail.task.isCompleted
-                    ? 'text-green-800 dark:text-green-300'
-                    : 'text-yellow-800 dark:text-yellow-300'
-                }`}>
-                  Task Details
-                </h3>
+                <h3 className="text-sm font-black uppercase">Task Details</h3>
               </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-slate-400 font-bold">Status:</span>
-                  <span className="text-gray-900 dark:text-slate-200 font-bold">{detail.task.status}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-slate-400 font-bold">Completed:</span>
-                  <span className={`font-bold ${
-                    detail.task.isCompleted
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {detail.task.isCompleted ? 'Yes' : 'No'}
-                  </span>
-                </div>
-                {/* <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
+              
+              <div className="space-y-4 text-sm">
+                <div className="pt-2">
                   <span className="text-gray-600 dark:text-slate-400 font-bold block mb-1">Task Content:</span>
-                  <p className="text-gray-900 dark:text-slate-200">{detail.task.content}</p>
-                </div> */}
-                <div 
+                  {/* FIX 1: HTML Rendering */}
+                  <div 
                     className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 p-3 rounded-lg border border-gray-100 dark:border-slate-700"
                     dangerouslySetInnerHTML={{ __html: detail.task.content }} 
                   />
-                {detail.task.managerComment && (
-                  <div className="pt-2 border-t border-gray-200 dark:border-slate-700">
-                    <span className="text-gray-600 dark:text-slate-400 font-bold block mb-1">Manager Comment:</span>
-                    <p className="text-gray-900 dark:text-slate-200">{detail.task.managerComment}</p>
+                </div>
+
+                {/* FIX 2: Manager Feedback Input */}
+                <div className="pt-4 border-t border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 mb-2 text-orange-600 dark:text-orange-400">
+                    <MessageSquare size={14} />
+                    <label className="text-[10px] font-black uppercase tracking-widest">Manager Feedback</label>
                   </div>
-                )}
+                  <textarea
+                    className="w-full h-24 rounded-xl p-4 outline-none transition-all resize-none font-medium border-2 bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 focus:border-indigo-500 text-gray-900 dark:text-slate-200"
+                    placeholder="Add feedback for this task..."
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                  />
+                  <button 
+                    onClick={handleSaveComment}
+                    disabled={isSaving}
+                    className="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    {isSaving ? "Saving..." : "Update Feedback"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -496,10 +531,7 @@ const DayDetailModal: React.FC<{ detail: DayDetail; onClose: () => void }> = ({ 
           {/* No Data */}
           {!detail.task && !detail.leave && detail.status !== 'Weekend' && (
             <div className="bg-red-50 dark:bg-red-950/20 rounded-xl p-8 text-center border border-red-200 dark:border-red-900">
-              <XCircle className="w-12 h-12 text-red-400 dark:text-red-600 mx-auto mb-3" />
-              <p className="text-red-600 dark:text-red-400 font-bold text-lg mb-1">
-                Absent
-              </p>
+              
               <p className="text-gray-500 dark:text-slate-400 text-sm">
                 No task or leave recorded for this day
               </p>

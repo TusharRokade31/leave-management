@@ -3,6 +3,7 @@ import { Calendar } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { LeaveFormData } from '@/type/form';
+import { toast } from 'react-toastify';
 
 interface LeaveFormProps {
   onSubmit: (formData: LeaveFormData) => Promise<void>;
@@ -36,12 +37,12 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
 
   const handleSubmit = async (): Promise<void> => {
     if (!formData.startDate || !formData.endDate || !formData.reason) {
-      alert('Please fill in all required fields');
+      toast('Please fill in all required fields');
       return;
     }
 
     if (['HALF', 'EARLY', 'LATE'].includes(formData.type) && !formData.startTime) {
-      alert('Please select time for this leave type');
+      toast('Please select time for this leave type');
       return;
     }
     

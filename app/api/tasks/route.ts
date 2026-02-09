@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
 
     // Normalize date to midnight to match the @@unique constraint 
     const normalizedDate = new Date(date);
-    normalizedDate.setHours(0, 0, 0, 0);
+    // normalizedDate.setHours(0, 0, 0, 0);
 
     /* DETERMINE TARGET USER:
        If a MANAGER is sending an employeeId, we update that employee's task.

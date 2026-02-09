@@ -35,6 +35,7 @@
     "react-day-picker": "^9.12.0",
     "react-dom": "19.2.1",
     "react-quill": "^2.0.0",
+    "react-toastify": "^11.0.5",
     "swr": "^2.4.0",
     "tailwind-merge": "^3.4.0"
   },

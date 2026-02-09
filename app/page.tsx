@@ -18,6 +18,7 @@ import LeaveTable from "@/components/LeaveTable";
 import EmployeeWorkStatusTable from "@/components/EmployeeWorkStatusTable"; // New import
 import { EmployeeCalendar } from "@/components/EmployeeCalendar";
 import { EmployeeTaskMonitor } from "@/components/EmployeeTaskMonitor";
+  import { ToastContainer } from 'react-toastify';
 export default function Home() {
   const { currentUser, loading, login, otpLogin, logout } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -30,10 +31,11 @@ export default function Home() {
   };
   const leaveHooks = useLeaves(currentUser);
   const leavedashboard = useDashboardLeaves(currentUser, currentMonth);
-  const { employees, loading: workStatusLoading } = useEmployeeWorkStatus(
-    currentUser,
-    currentMonth,
-  ); // New hook
+  const { 
+  employees, 
+  loading: workStatusLoading, 
+  updateTaskFeedback // Extract this
+} = useEmployeeWorkStatus(currentUser, currentMonth); // New hook
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
@@ -64,6 +66,7 @@ export default function Home() {
   const pendingLeaves = leaveHooks.leaves.filter((l) => l.status === "PENDING");
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-slate-950 transition-colors duration-300">
+      <ToastContainer position="top-right" autoClose={3000} />
       <Header
         currentUser={currentUser}
         onLogout={handleLogout}
@@ -139,7 +142,7 @@ export default function Home() {
             <div className="space-y-8">
               <div className="flex flex-wrap justify-between items-center gap-4">
                 <h2 className="text-2xl font-black tracking-tight text-gray-800 dark:text-white uppercase">
-                  Leave Management
+                  AlphaBeta Management
                 </h2>
 
                 <div className="flex items-center gap-3">
@@ -203,6 +206,7 @@ export default function Home() {
                     employees={employees}
                     currentMonth={currentMonth}
                     onMonthChange={setCurrentMonth}
+                    onUpdateFeedback={updateTaskFeedback}
                   />
                 )}
               </div>

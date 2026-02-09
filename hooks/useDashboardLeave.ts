@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Stats, LeaveFormData } from "@/type/form";
 
 import { api } from "@/lib/api/api";
+import { toast } from "react-toastify";
 
 interface UseLeavesReturn {
   leaves: Leave[];
@@ -55,10 +56,10 @@ export const useDashboardLeaves = (currentUser: User | null, currentDate: Date):
     try {
       await api.createLeave(leaveData);
       await fetchLeaves();
-      alert('Leave request submitted successfully!');
+      toast.success('Leave request submitted successfully!');
     } catch (error) {
       console.error('Failed to create leave:', error);
-      alert('Failed to create leave: ' + (error as Error).message);
+      toast.error('Failed to create leave: ' + (error as Error).message);
       throw error;
     }
   };
@@ -67,10 +68,10 @@ export const useDashboardLeaves = (currentUser: User | null, currentDate: Date):
     try {
       await api.updateLeaveStatus(leaveId, status);
       await fetchLeaves();
-      alert(`Leave ${status.toLowerCase()} successfully!`);
+      toast.success(`Leave ${status.toLowerCase()} successfully!`);
     } catch (error) {
       console.error('Failed to update leave:', error);
-      alert('Failed to update leave: ' + (error as Error).message);
+      toast.error('Failed to update leave: ' + (error as Error).message);
       throw error;
     }
   };
@@ -83,10 +84,10 @@ export const useDashboardLeaves = (currentUser: User | null, currentDate: Date):
     try {
       await api.deleteLeave(leaveId);
       await fetchLeaves();
-      alert('Leave deleted successfully!');
+      toast.success('Leave deleted successfully!');
     } catch (error) {
       console.error('Failed to delete leave:', error);
-      alert('Failed to delete leave: ' + (error as Error).message);
+      toast.error('Failed to delete leave: ' + (error as Error).message);
       throw error;
     }
   };

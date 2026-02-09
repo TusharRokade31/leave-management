@@ -49,7 +49,7 @@ export const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onNotific
             <div className="hidden sm:block">
               <div className="flex items-center space-x-3">
                 <h1 className="text-xl lg:text-2xl font-bold text-gray-800 dark:text-white">
-                  Leave Management
+                  AlphaBeta Management
                 </h1>
                 <span className="px-2.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded text-xs font-medium">
                   {currentUser.role === 'MANAGER' ? 'Manager' : 'Employee'}

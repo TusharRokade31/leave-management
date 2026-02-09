@@ -1,5 +1,5 @@
 // hooks/useEmployeeWorkStatus.ts
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api/api";
 
 interface Task {
@@ -36,23 +36,23 @@ interface UseEmployeeWorkStatusReturn {
   employees: Employee[];
   loading: boolean;
   fetchEmployeeWorkStatus: () => Promise<void>;
+  updateTaskFeedback: (date: string, employeeId: number, comment: string) => Promise<boolean>;
 }
 
 export const useEmployeeWorkStatus = (
-  currentUser: User | null,
+  currentUser: any | null, // Replace 'any' with your User type
   currentDate: Date
 ): UseEmployeeWorkStatusReturn => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const fetchEmployeeWorkStatus = async (): Promise<void> => {
+  const fetchEmployeeWorkStatus = useCallback(async (): Promise<void> => {
     if (!currentUser || currentUser.role !== 'MANAGER') return;
 
     setLoading(true);
     try {
       const month = currentDate.getMonth() + 1;
       const year = currentDate.getFullYear();
-
       const data = await api.getEmployeeWorkStatus(month, year);
       setEmployees(data);
     } catch (error) {
@@ -60,15 +60,43 @@ export const useEmployeeWorkStatus = (
     } finally {
       setLoading(false);
     }
+  }, [currentUser, currentDate]);
+
+  const updateTaskFeedback = async (date: string, employeeId: number, comment: string) => {
+    try {
+      // Reusing your fetch logic from the modal
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json", 
+          "Authorization": `Bearer ${document.cookie.split('authToken=')[1]?.split(';')[0]}` 
+        },
+        body: JSON.stringify({
+          date,
+          employeeId,
+          managerComment: comment,
+        }),
+      });
+
+      if (response.ok) {
+        await fetchEmployeeWorkStatus(); // Refresh the list automatically
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to update feedback:", error);
+      return false;
+    }
   };
 
   useEffect(() => {
     fetchEmployeeWorkStatus();
-  }, [currentUser, currentDate]);
+  }, [fetchEmployeeWorkStatus]);
 
   return {
     employees,
     loading,
     fetchEmployeeWorkStatus,
+    updateTaskFeedback
   };
 };
