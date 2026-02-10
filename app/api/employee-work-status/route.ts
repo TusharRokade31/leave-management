@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         email: true,
+        role: true,        // ADD THIS
+        endDate: true,     // ADD THIS - Critical for offboarding date persistence
         leaves: {
           where: startDate && endDate ? {
             status: 'APPROVED',
@@ -109,6 +111,8 @@ export async function GET(req: NextRequest) {
         id: emp.id,
         name: emp.name,
         email: emp.email,
+        role: emp.role,        // ADD THIS
+        endDate: emp.endDate,  // ADD THIS
       },
       leaves: emp.leaves,
       tasks: emp.tasks,

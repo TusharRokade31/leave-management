@@ -9,8 +9,14 @@ export interface AuthUser {
 }
 
 export function authenticateToken(req: NextRequest): AuthUser {
+  // 1. Try to get token from Authorization Header
   const authHeader = req.headers.get('authorization');
-  const token = authHeader?.split(' ')[1];
+  let token = authHeader?.split(' ')[1];
+
+  // 2. If no header, try to get token from Cookies
+  if (!token) {
+    token = req.cookies.get('authToken')?.value;
+  }
 
   if (!token) {
     throw new Error('Access token required');
@@ -35,4 +41,4 @@ export function verifyToken(token: string): AuthUser {
   } catch (err) {
     throw new Error('Invalid or expired token');
   }
-}
+} 
