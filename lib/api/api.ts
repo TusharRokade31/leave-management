@@ -28,7 +28,7 @@ export const getAuthToken = (): string | null => {
 };
 
 export const setAuthToken = (token: string): void => {
-  setCookie('authToken', token, 1);
+  setCookie('authToken', token, 7);
 };
 
 export const removeAuthToken = (): void => {
