@@ -6,7 +6,6 @@ interface UserManagementModalProps {
   employees: any[]; 
   onAdd: (userData: { name: string; email: string; role: string }) => Promise<void>;
   onUpdate: (userId: number, updateData: { endDate: string | null }) => Promise<void>;
-  onDelete: (userId: number) => Promise<void>;
   onClose: () => void;
 }
 

@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useRef, useMemo } from "react";
-import { Upload, Users, LogOut, AlertTriangle } from "lucide-react"; 
+import React, { useState, useRef, useMemo, useEffect } from "react";
+import { Upload, Users, LogOut, AlertTriangle, X, Calendar as CalendarIcon, MessageSquare, CheckCircle, XCircle, Clock } from "lucide-react"; 
 import { useAuth } from "@/hooks/useAuth";
 import { useLeaves } from "@/hooks/useLeaves";
 import { useDashboardLeaves } from "@/hooks/useDashboardLeave";
@@ -19,6 +19,7 @@ import { LeaveFormData } from "@/type/form";
 import EmployeeWorkStatusTable from "@/components/EmployeeWorkStatusTable";
 import { EmployeeCalendar } from "@/components/EmployeeCalendar";
 import { ToastContainer, toast } from 'react-toastify';
+import { formatDate } from "@/utils/formatDate";
 
 export default function Home() {
   const { currentUser, loading, login, otpLogin, logout } = useAuth();
@@ -49,6 +50,26 @@ export default function Home() {
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  
+  // Detail View State (Kept for potential manual triggers from tables)
+  const [selectedLeaveForView, setSelectedLeaveForView] = useState<any | null>(null);
+
+  // ================= NOTIFICATION LOGIC (Synced with Panel) =================
+  const managerNotifications = useMemo(() => 
+    leaveHooks.leaves.filter((l) => l.status === "PENDING"), 
+  [leaveHooks.leaves]);
+
+  const employeeNotifications = useMemo(() => {
+    if (currentUser?.role !== "EMPLOYEE") return [];
+    // Only show pending requests to employee in the feed
+    return leaveHooks.leaves.filter((l) => l.status === "PENDING")
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [leaveHooks.leaves, currentUser]);
+
+  // Sync: Active count matches the items visible in the panel for both roles
+  const activeNotificationCount = currentUser?.role === "MANAGER" 
+    ? managerNotifications.length 
+    : employeeNotifications.length;
 
   const visibleEmployees = useMemo(() => {
     return employees.filter(emp => {
@@ -65,22 +86,15 @@ export default function Home() {
   const handleOTPLogin = async (email: string, otp: string) =>
     await otpLogin(email, otp);
   
-  // ================= LOGOUT HANDLER (Ensuring clean exit) =================
   const handleLogout = async () => {
     try {
-      await logout(); // Call the auth hook logout
-      
-      // Force UI state resets
+      await logout();
       setShowLogoutConfirm(false);
       setShowLeaveForm(false);
       setShowNotifications(false);
       setShowBulkUpload(false);
       setShowUserManagement(false);
-      
       toast.info("Logged out successfully");
-      
-      // Optional: If the hook doesn't redirect, manually refresh to clear all data
-      // window.location.reload(); 
     } catch (error) {
       console.error("Logout failed:", error);
       toast.error("Logout failed. Please clear your browser cache.");
@@ -158,10 +172,8 @@ export default function Home() {
       }
 
       toast.success("Work status updated and synced!");
-      
       if (leaveHooks.fetchLeaves) await leaveHooks.fetchLeaves();
       if (refreshData) await refreshData(); 
-      
       return true;
     } catch (error: any) {
       console.error("Error splitting leave:", error);
@@ -182,8 +194,6 @@ export default function Home() {
     return <LoginForm onLogin={handleLogin} onOTPLogin={handleOTPLogin} />;
   }
 
-  const pendingLeaves = leaveHooks.leaves.filter((l) => l.status === "PENDING");
-
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-slate-950 transition-colors duration-300">
       <ToastContainer position="top-right" autoClose={3000} />
@@ -191,9 +201,7 @@ export default function Home() {
         currentUser={currentUser}
         onLogout={() => setShowLogoutConfirm(true)} 
         onNotificationClick={() => setShowNotifications(true)}
-        notificationCount={
-          currentUser.role === "MANAGER" ? pendingLeaves.length : 0
-        }
+        notificationCount={activeNotificationCount}
       />
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-12">
         <StatsCards stats={leavedashboard.stats} />
@@ -339,7 +347,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* ================= LOGOUT CONFIRMATION POPUP ================= */}
+      {/* Logout Confirmation */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl border border-gray-100 dark:border-slate-800 animate-in zoom-in-95 duration-200">
@@ -347,12 +355,10 @@ export default function Home() {
               <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto text-red-500">
                 <AlertTriangle size={40} />
               </div>
-              
               <div className="space-y-2">
                 <h3 className="text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight">Confirm Logout</h3>
-                <p className="text-gray-500 dark:text-gray-400 font-medium">Are you sure you want to end your session? You will need to login again to access your dashboard.</p>
+                <p className="text-gray-500 dark:text-gray-400 font-medium">Are you sure you want to end your session?</p>
               </div>
-
               <div className="flex gap-4 pt-4">
                 <button
                   onClick={() => setShowLogoutConfirm(false)}
@@ -372,13 +378,90 @@ export default function Home() {
         </div>
       )}
 
-      {/* Modals */}
-      {showNotifications && currentUser.role === "MANAGER" && (
+      {/* ================= LEAVE DETAIL MODAL ================= */}
+      {selectedLeaveForView && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100 dark:border-slate-800">
+            <div className={`p-8 text-white bg-gradient-to-br ${selectedLeaveForView.status === 'APPROVED' ? 'from-green-600 to-green-700' : selectedLeaveForView.status === 'REJECTED' ? 'from-red-600 to-red-700' : 'from-indigo-600 to-indigo-700'}`}>
+              <div className="flex justify-between items-start">
+                <div className="flex gap-4 items-center">
+                  <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md">
+                    {selectedLeaveForView.status === 'APPROVED' ? <CheckCircle size={24}/> : selectedLeaveForView.status === 'REJECTED' ? <XCircle size={24}/> : <Clock size={24}/>}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-0.5">Request Insight</p>
+                    <h3 className="text-2xl font-black">{selectedLeaveForView.user?.name || "Leave Request"}</h3>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedLeaveForView(null)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                    <CalendarIcon size={12} /> Duration
+                  </label>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{selectedLeaveForView.days} Working Days</p>
+                  <span className="text-[10px] font-black bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded uppercase">{selectedLeaveForView.type}</span>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                    <Clock size={12} /> Status
+                  </label>
+                  <p className={`text-lg font-black uppercase tracking-tight ${selectedLeaveForView.status === 'APPROVED' ? 'text-green-500' : selectedLeaveForView.status === 'REJECTED' ? 'text-red-500' : 'text-amber-500'}`}>
+                    {selectedLeaveForView.status}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">Service Period</label>
+                <p className="font-bold text-slate-700 dark:text-slate-200">
+                  {formatDate(selectedLeaveForView.startDate)} <span className="text-slate-300 mx-2">→</span> {formatDate(selectedLeaveForView.endDate)}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Reason for absence</label>
+                <div className="bg-slate-50 dark:bg-slate-800/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 italic text-slate-600 dark:text-slate-400">
+                  "{selectedLeaveForView.reason}"
+                </div>
+              </div>
+
+              {selectedLeaveForView.managerComment && (
+                <div className="p-5 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/20">
+                  <label className="text-[10px] font-black uppercase text-amber-600 tracking-widest flex items-center gap-2 mb-2">
+                    <MessageSquare size={12} /> Manager Feedback
+                  </label>
+                  <p className="text-sm text-amber-800 dark:text-amber-400 font-medium italic">"{selectedLeaveForView.managerComment}"</p>
+                </div>
+              )}
+
+              <button 
+                onClick={() => setSelectedLeaveForView(null)}
+                className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black uppercase text-xs tracking-widest rounded-2xl hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-slate-200 dark:shadow-none"
+              >
+                Done Reading
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notifications Panel */}
+      {showNotifications && (
         <NotificationPanel
-          recentRequests={pendingLeaves as any}
+          recentRequests={currentUser.role === "MANAGER" ? (managerNotifications as any) : (employeeNotifications as any)}
+          userRole={currentUser.role}
           onClose={() => setShowNotifications(false)}
+          // Removed onSelectLeave logic to enforce view-only feed behavior
         />
       )}
+      
       {showBulkUpload && currentUser.role === "MANAGER" && (
         <BulkUploadModal onClose={() => setShowBulkUpload(false)} />
       )}
@@ -387,7 +470,7 @@ export default function Home() {
           employees={employees as any}
           onAdd={addUser}
           onUpdate={updateUser}
-          onDelete={deleteUser}
+          // onDelete={deleteUser}
           onClose={() => setShowUserManagement(false)} 
         />
       )}
