@@ -12,12 +12,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
     }
 
-    // Validate time for specific leave types
     if (['HALF', 'EARLY', 'LATE'].includes(type?.toUpperCase()) && !startTime) {
       return NextResponse.json({ error: 'Time is required for this leave type' }, { status: 400 });
     }
 
-    // Date Normalization to prevent timezone shifting (Midday logic)
     const parseLocalDate = (dateStr: string) => {
       const date = new Date(dateStr);
       date.setHours(12, 0, 0, 0); 
@@ -53,6 +51,21 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // --- NOTIFICATION LOGIC ---
+    // Trigger notification after successful creation
+    try {
+      await sendLeaveNotification({
+        mode: 'NEW',
+        leave: leave,
+        employeeName: leave.user.name,
+        employeeEmail: leave.user.email
+      });
+    } catch (emailErr) {
+      // We log the error but don't stop the response because the leave was successfully created
+      console.error('Notification failed but leave was created:', emailErr);
+    }
+    // ---------------------------
+
     return NextResponse.json(leave, { status: 201 });
   } catch (err: any) {
     console.error('Create leave error:', err);
@@ -60,17 +73,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// GET function remains exactly the same as your provided code
 export async function GET(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
     const { searchParams } = new URL(req.url);
     const userIdParam = searchParams.get('userId');
 
-    /**
-     * Logic:
-     * 1. If Manager: retrieve all leaves OR filter by userId query param.
-     * 2. If Employee: strictly retrieve only their own leaves.
-     */
     let whereClause: any = {};
 
     if (authUser.role === 'MANAGER') {
@@ -78,7 +87,6 @@ export async function GET(req: NextRequest) {
         whereClause.userId = parseInt(userIdParam);
       }
     } else {
-      // Employees can only fetch their own leaves for the calendar
       whereClause.userId = authUser.id;
     }
 

@@ -5,8 +5,14 @@ import { sendWelcomeEmail } from '@/lib/welcomeemail';
 import { parse } from 'csv-parse/sync';
 import { authenticateToken } from '@/lib/auth';
 
+// 1. Define the interface for the CSV row to fix TypeScript errors
+interface CSVUserRecord {
+  name?: string;
+  fullname?: string;
+  email?: string;
+  role?: string;
+}
 
-// Generate random password
 function generatePassword(length = 12): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
   let password = '';
@@ -29,13 +35,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Read and parse CSV
     const fileContent = await file.text();
+    
+    // The columns function here ensures all headers become lowercase
     const records = parse(fileContent, {
-      columns: true,
+      columns: (header: string[]) => 
+        header.map(h => h.toLowerCase().trim()), 
       skip_empty_lines: true,
       trim: true,
-    });
+      bom: true, 
+    }) as CSVUserRecord[]; // 2. Cast the result to our interface
 
     const results = {
       success: [] as string[],
@@ -43,23 +52,25 @@ export async function POST(req: NextRequest) {
       reset: [] as string[],
     };
 
-    // Process each user
     for (const record of records) {
-        const { name, email, role } = record as { name: string; email: string; role: string; reason: string };
-
+      // 3. Logic simplified: headers are already lowercase thanks to the parser config
+      const name = record.name || record.fullname;
+      const email = record.email;
+      const role = (record.role || 'EMPLOYEE').toUpperCase().trim();
 
       if (!name || !email) {
         results.failed.push({
-          email: email || 'unknown',
-          reason: 'Missing name or email',
+          email: email || 'Row ' + (records.indexOf(record) + 1),
+          reason: 'Missing name or email (Required headers: name, email)',
         });
         continue;
       }
 
       try {
-        // Check if user exists
+        const emailLower = email.toLowerCase().trim();
+        
         const existingUser = await prisma.user.findUnique({
-          where: { email },
+          where: { email: emailLower },
         });
 
         const tempPassword = generatePassword();
@@ -67,39 +78,40 @@ export async function POST(req: NextRequest) {
 
         if (existingUser) {
           if (resetExisting) {
-            // Reset existing user's password
             await prisma.user.update({
-              where: { email },
-              data: { password: hashedPassword },
+              where: { email: emailLower },
+              data: { 
+                password: hashedPassword,
+                name: name.trim() 
+              },
             });
 
-            await sendWelcomeEmail(email, name, tempPassword);
-            results.reset.push(email);
+            await sendWelcomeEmail(emailLower, name, tempPassword);
+            results.reset.push(emailLower);
           } else {
             results.failed.push({
-              email,
+              email: emailLower,
               reason: 'User already exists',
             });
           }
         } else {
-          // Create new user
           await prisma.user.create({
             data: {
-              name,
-              email,
+              name: name.trim(),
+              email: emailLower,
               password: hashedPassword,
               role: role === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE',
             },
           });
 
-          await sendWelcomeEmail(email, name, tempPassword);
-          results.success.push(email);
+          await sendWelcomeEmail(emailLower, name, tempPassword);
+          results.success.push(emailLower);
         }
       } catch (error) {
         console.error(`Error processing ${email}:`, error);
         results.failed.push({
-          email,
-          reason: 'Processing error',
+          email: email || 'unknown',
+          reason: 'Database processing error',
         });
       }
     }
@@ -111,7 +123,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Bulk creation error:', error);
     return NextResponse.json(
-      { error: 'Server error' },
+      { error: 'CSV Parsing Error: Please check your file format.' },
       { status: 500 }
     );
   }
@@ -121,7 +133,6 @@ export async function GET(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
 
-    // Only managers should be able to fetch the full employee list
     if (authUser.role !== 'MANAGER') {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }

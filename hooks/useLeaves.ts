@@ -3,6 +3,28 @@ import { Stats, LeaveFormData } from "@/type/form";
 import { api } from "@/lib/api/api";
 import { toast } from "react-toastify";
 
+// 1. Ensure the local interface is exactly what the UI needs
+interface Leave {
+  id: number;
+  userId: number;
+  startDate: string | Date;
+  endDate: string | Date;
+  startTime?: string | null;
+  endTime?: string | null;
+  reason: string;
+  type: string;
+  days: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  managerComment?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  isEdited?: boolean;
+  editSummary?: string | null;
+  user?: {
+    name: string | null;
+  };
+}
+
 interface UseLeavesReturn {
   leaves: Leave[];
   loading: boolean;
@@ -13,7 +35,7 @@ interface UseLeavesReturn {
   deleteLeave: (leaveId: number) => Promise<void>;
 }
 
-export const useLeaves = (currentUser: User | null): UseLeavesReturn => {
+export const useLeaves = (currentUser: any): UseLeavesReturn => { // Changed User to any if not imported
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, approved: 0, wfh: 0 });
@@ -23,13 +45,17 @@ export const useLeaves = (currentUser: User | null): UseLeavesReturn => {
     
     setLoading(true);
     try {
-      let fetchedLeaves: Leave[];
+      // 2. We use 'any' as a bridge to resolve the red line mismatch between the API response and local interface
+      let fetchedData: any; 
+      
       if (currentUser.role === 'MANAGER') {
-        fetchedLeaves = await api.getAllLeaves();
+        fetchedData = await api.getAllLeaves();
       } else {
-        fetchedLeaves = await api.getMyLeaves();
+        fetchedData = await api.getMyLeaves();
       }
-      setLeaves(fetchedLeaves);
+      
+      // 3. Cast the data to our new local interface
+      setLeaves(fetchedData as Leave[]);
       
       // Fetch stats
       const fetchedStats = await api.getStats();

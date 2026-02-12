@@ -80,7 +80,7 @@ export function OffboardingAlert({ employees, onManageClick }: OffboardingAlertP
               Off-boarding Alerts
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
-              {offboardingData.all.length} employee{offboardingData.all.length !== 1 ? 's' : ''} scheduled to offboard
+              {offboardingData.all.length} employee{offboardingData.all.length !== 1 ? 's' : ''} scheduled to off-board
             </p>
           </div>
         </div>

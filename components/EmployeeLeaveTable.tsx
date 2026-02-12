@@ -3,55 +3,126 @@ import React, { useState } from 'react';
 import { getStatusIcon } from '@/utils/getStatusIcon';
 import { formatDate } from '@/utils/formatDate';
 import { getStatusColor } from '@/utils/getStatusColors';
-import { Eye, X } from 'lucide-react';
+import { Eye, X, Edit2, Save, Calendar, Clock, FileText, MessageSquare, RefreshCcw } from 'lucide-react';
 
-interface EmployeeLeaveTableProps {
-  leaves: Leave[];
-  onDelete: (leaveId: number) => Promise<void>;
+interface TableLeave {
+  id: number;
+  userId: number;
+  startDate: string;
+  endDate: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  reason: string;
+  type: string;
+  days: number;
+  status: string;
+  managerComment?: string | null;
+  createdAt: string;
+  updatedAt: string; 
+  isEdited?: boolean; 
+  editSummary?: string | null; 
 }
 
-export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, onDelete }) => {
-  const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
+interface EmployeeLeaveTableProps {
+  leaves: TableLeave[];
+  onDelete: (leaveId: number) => Promise<void>;
+  onUpdate: (leaveId: number, updatedData: Partial<TableLeave>) => Promise<void>;
+}
 
-  const formatRequestedTime = (timestamp: string): string => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, onDelete, onUpdate }) => {
+  const [selectedLeave, setSelectedLeave] = useState<TableLeave | null>(null);
+  
+  const [editingLeave, setEditingLeave] = useState<TableLeave | null>(null);
+  const [editForm, setEditForm] = useState({
+    startDate: "",
+    endDate: "",
+    type: "",
+    reason: "",
+    startTime: "",
+    endTime: ""
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleEditInit = (leave: TableLeave) => {
+    setEditingLeave(leave);
+    setEditForm({
+      startDate: leave.startDate.split('T')[0],
+      endDate: leave.endDate.split('T')[0],
+      type: leave.type,
+      reason: leave.reason,
+      startTime: leave.startTime || "",
+      endTime: leave.endTime || ""
     });
   };
 
-  const formatLeaveTime = (leave: Leave): string | null => {
-    if (!leave.startTime) return null;
+  const isWithinEditWindow = (createdAt: string): boolean => {
+    if (!createdAt) return false;
+    const createdDate = new Date(createdAt);
+    const deadline = new Date(createdDate);
+    deadline.setDate(deadline.getDate() + 1);
+    deadline.setHours(12, 0, 0, 0);
+    return new Date() < deadline;
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingLeave) return;
+    setIsSubmitting(true);
     
-    switch (leave.type) {
-      case 'HALF':
-        return `${leave.startTime} - ${leave.endTime || 'N/A'}`;
-      case 'EARLY':
-        return `Leaving at ${leave.startTime}`;
-      case 'LATE':
-        return `Arriving at ${leave.startTime}`;
-      case 'WORK_FROM_HOME':
-        return 'All Day';
-      default:
-        return null;
+    try {
+      const changes: string[] = [];
+      
+      // IMPROVED: Strict Date Change Detection (Comparing YYYY-MM-DD)
+      const originalStart = editingLeave.startDate.split('T')[0];
+      const originalEnd = editingLeave.endDate.split('T')[0];
+      
+      if (editForm.startDate !== originalStart || editForm.endDate !== originalEnd) {
+        changes.push("Dates");
+      }
+      
+      if (editForm.type !== editingLeave.type) changes.push("Type");
+      if (editForm.reason !== editingLeave.reason) changes.push("Reason");
+      if (editForm.startTime !== (editingLeave.startTime || "")) changes.push("Timing");
+
+      const wasDecided = editingLeave.status !== 'PENDING';
+      
+      let editSummary = changes.length > 0 
+        ? `Changed ${changes.join(', ')}` 
+        : "Updated details";
+      
+      if (wasDecided) {
+        editSummary += " (Status reset to Pending)";
+      }
+
+      await onUpdate(editingLeave.id, {
+        ...editForm,
+        status: 'PENDING',
+        isEdited: true,
+        updatedAt: new Date().toISOString(),
+        editSummary: editSummary 
+      });
+      
+      setEditingLeave(null);
+    } catch (error) {
+      console.error("Failed to update leave:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  if (leaves.length === 0) {
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-8 text-center transition-colors">
-        <p className="text-gray-500 dark:text-slate-400">No leave requests found</p>
-      </div>
-    );
-  }
+  const formatRequestedTime = (timestamp: string): string => {
+    if (!timestamp) return "N/A";
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  if (leaves.length === 0) return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-8 text-center transition-colors">
+      <p className="text-gray-500 dark:text-slate-400">No leave requests found</p>
+    </div>
+  );
 
   return (
     <>
-      {/* Desktop Table View */}
       <div className="hidden md:block bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden transition-colors">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -59,9 +130,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Dates</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Days</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Reason</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Requested At</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
               </tr>
@@ -73,46 +142,40 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                     <div className="text-gray-900 dark:text-slate-100 font-medium">
                       {formatDate(leave.startDate)} to {formatDate(leave.endDate)}
                     </div>
-                    {formatLeaveTime(leave) && (
-                      <div className="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
-                        🕐 {formatLeaveTime(leave)}
-                      </div>
-                    )}
+                    {leave.isEdited && <span className="text-[10px] text-amber-600 font-semibold italic">Edited</span>}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 dark:text-slate-300 capitalize">
-                    {leave.type === 'WORK_FROM_HOME' ? 'WFH' : leave.type.toLowerCase()}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 dark:text-slate-300">{leave.days}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <div className="max-w-xs">
-                      <p className="truncate text-gray-600 dark:text-slate-400">{leave.reason}</p>
-                      <button
-                        onClick={() => setSelectedLeave(leave)}
-                        className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs flex items-center space-x-1 mt-1 font-semibold"
-                      >
-                        <Eye className="w-3 h-3" />
-                        <span>View full</span>
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">
-                    {formatRequestedTime(leave.createdAt)}
-                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-900 dark:text-slate-300 capitalize">{leave.type.toLowerCase()}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400 truncate max-w-[150px]">{leave.reason}</td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium capitalize ring-1 ring-inset ${getStatusColor(leave.status)}`}>
-                      {getStatusIcon(leave.status)}
+                    <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium capitalize ring-1 ring-inset ${getStatusColor(leave.status as any)}`}>
+                      {getStatusIcon(leave.status as any)}
                       <span>{leave.status.toLowerCase()}</span>
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    {leave.status === 'PENDING' && (
-                      <button
-                        onClick={() => onDelete(leave.id)}
-                        className="px-3 py-1 text-sm bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                    <div className="flex items-center space-x-2">
+                      <button 
+                        onClick={() => setSelectedLeave(leave)} 
+                        className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                        title="View Details"
                       >
-                        Delete
+                        <Eye className="w-4 h-4" />
                       </button>
-                    )}
+                      
+                      {isWithinEditWindow(leave.createdAt) && (
+                        <button 
+                          onClick={() => handleEditInit(leave)} 
+                          className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                          title="Edit Request"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      
+                      {leave.status === 'PENDING' && (
+                        <button onClick={() => onDelete(leave.id)} className="px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm">Delete</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -121,138 +184,194 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
         </div>
       </div>
 
-      {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
-        {leaves.map(leave => (
-          <div key={leave.id} className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-4 transition-colors">
-            <div className="flex items-center justify-between mb-3">
-              <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium capitalize ring-1 ring-inset ${getStatusColor(leave.status)}`}>
-                {getStatusIcon(leave.status)}
-                <span>{leave.status.toLowerCase()}</span>
-              </span>
-              <span className="text-xs text-gray-500 dark:text-slate-400 capitalize">
-                {leave.type === 'WORK_FROM_HOME' ? 'WFH' : leave.type.toLowerCase()}
-              </span>
-            </div>
-
-            <div className="mb-3">
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-                {formatDate(leave.startDate)} to {formatDate(leave.endDate)}
-              </p>
-              {formatLeaveTime(leave) && (
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
-                  🕐 {formatLeaveTime(leave)}
-                </p>
-              )}
-            </div>
-
-            <div className="mb-3">
-              <span className="text-xs text-gray-500 dark:text-slate-400">Days: </span>
-              <span className="text-sm font-medium text-gray-900 dark:text-slate-200">{leave.days}</span>
-            </div>
-
-            <div className="mb-3">
-              <p className="text-xs text-gray-500 dark:text-slate-400 mb-1">Reason:</p>
-              <p className="text-sm text-gray-900 dark:text-slate-300 line-clamp-2">{leave.reason}</p>
-              <button
-                onClick={() => setSelectedLeave(leave)}
-                className="text-indigo-600 dark:text-indigo-400 text-xs flex items-center space-x-1 mt-2 font-semibold"
-              >
-                <Eye className="w-3 h-3" />
-                <span>View full details</span>
-              </button>
-            </div>
-
-            <div className="mb-3">
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 italic">
-                Requested: {formatRequestedTime(leave.createdAt)}
-              </p>
-            </div>
-
-            {leave.status === 'PENDING' && (
-              <div className="pt-3 border-t border-gray-100 dark:border-slate-800">
-                <button
-                  onClick={() => onDelete(leave.id)}
-                  className="w-full px-3 py-2 text-sm bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors font-medium"
-                >
-                  Delete Request
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* View Full Detail Modal */}
+      {/* VIEW DETAILS MODAL */}
       {selectedLeave && (
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col transition-colors border border-gray-200 dark:border-slate-800">
-            <div className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Leave Request Details</h3>
-              <button
-                onClick={() => setSelectedLeave(null)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 transition-colors p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50/50 dark:bg-slate-800/50">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white uppercase tracking-tight">Request Details</h3>
+              <button onClick={() => setSelectedLeave(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
             </div>
-            
-            <div className="px-6 py-6 space-y-6 overflow-y-auto">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Start Date</label>
-                  <p className="text-gray-900 dark:text-slate-200 font-medium mt-1">{formatDate(selectedLeave.startDate)}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">End Date</label>
-                  <p className="text-gray-900 dark:text-slate-200 font-medium mt-1">{formatDate(selectedLeave.endDate)}</p>
-                </div>
-              </div>
 
-              {formatLeaveTime(selectedLeave) && (
-                <div>
-                  <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Time Schedule</label>
-                  <p className="text-indigo-600 dark:text-indigo-400 font-semibold mt-1">🕐 {formatLeaveTime(selectedLeave)}</p>
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {/* Edit Summary Highlight */}
+              {selectedLeave.isEdited && selectedLeave.editSummary && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-xl">
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Update History</p>
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-300">{selectedLeave.editSummary}</p>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Leave Type</label>
-                  <p className="text-gray-900 dark:text-slate-200 capitalize font-medium mt-1">
-                    {selectedLeave.type === 'WORK_FROM_HOME' ? 'WFH' : selectedLeave.type.toLowerCase()}
+              {selectedLeave.managerComment && (
+                <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                    <MessageSquare size={16} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Manager's Feedback</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-slate-100 italic leading-relaxed">
+                    "{selectedLeave.managerComment}"
                   </p>
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Total Days</label>
-                  <p className="text-gray-900 dark:text-slate-200 font-medium mt-1">{selectedLeave.days}</p>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Duration</label>
+                  <p className="text-gray-900 dark:text-slate-200 font-bold flex items-center">
+                    {selectedLeave.isEdited && selectedLeave.editSummary?.includes('Dates') && <Clock className="w-3 h-3 text-amber-500 mr-2" />}
+                    {formatDate(selectedLeave.startDate)} to {formatDate(selectedLeave.endDate)}
+                    <span className="ml-2 text-indigo-600 dark:text-indigo-400">({selectedLeave.days} Days)</span>
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Leave Type</label>
+                  <p className="text-gray-900 dark:text-slate-200 font-bold capitalize">{selectedLeave.type.toLowerCase()}</p>
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Request Status</label>
-                <div className="mt-2">
-                  <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium capitalize ring-1 ring-inset ${getStatusColor(selectedLeave.status)}`}>
-                    {getStatusIcon(selectedLeave.status)}
-                    <span>{selectedLeave.status.toLowerCase()}</span>
-                  </span>
+              {selectedLeave.startTime && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Timing Details</label>
+                  <p className="text-gray-900 dark:text-slate-200 font-bold flex items-center gap-2">
+                    <Clock className="w-3 h-3 text-indigo-500" />
+                    {selectedLeave.startTime} {selectedLeave.endTime ? `to ${selectedLeave.endTime}` : ''}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Reason for Request</label>
+                <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-800">
+                  <p className="text-gray-900 dark:text-slate-300 italic whitespace-pre-wrap">"{selectedLeave.reason}"</p>
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Reason for Leave</label>
-                <div className="mt-2 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800">
-                  <p className="text-gray-900 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{selectedLeave.reason}</p>
+              <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-800">
+                <div className="text-[10px] text-gray-400">
+                  Applied on: {formatRequestedTime(selectedLeave.createdAt)}
                 </div>
+                <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${getStatusColor(selectedLeave.status as any)}`}>
+                  {getStatusIcon(selectedLeave.status as any)}
+                  <span>{selectedLeave.status}</span>
+                </span>
               </div>
             </div>
 
-            <div className="bg-gray-50 dark:bg-slate-800/30 px-6 py-4 flex justify-end border-t border-gray-200 dark:border-slate-800">
-              <button
-                onClick={() => setSelectedLeave(null)}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold shadow-lg shadow-indigo-200 dark:shadow-none"
+            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t flex justify-end">
+              <button 
+                onClick={() => setSelectedLeave(null)} 
+                className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {editingLeave && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-slate-800">
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50/50 dark:bg-slate-800/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                  <Edit2 className="w-5 h-5 text-indigo-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Edit Leave Request</h3>
+              </div>
+              <button onClick={() => setEditingLeave(null)} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {editingLeave.status !== 'PENDING' && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl flex items-center gap-2">
+                  <span className="text-red-600 dark:text-red-400 text-xs font-bold uppercase">⚠️ Warning:</span>
+                  <p className="text-xs text-red-700 dark:text-red-300">
+                    This request is already <strong>{editingLeave.status}</strong>. Updating it will reset the status to <strong>PENDING</strong> and send a notification to your manager.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2"><Calendar className="w-3 h-3" /> Start Date</label>
+                  <input 
+                    type="date" 
+                    value={editForm.startDate} 
+                    onChange={(e) => setEditForm({...editForm, startDate: e.target.value})}
+                    className="w-full p-3 bg-gray-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2"><Calendar className="w-3 h-3" /> End Date</label>
+                  <input 
+                    type="date" 
+                    value={editForm.endDate} 
+                    onChange={(e) => setEditForm({...editForm, endDate: e.target.value})}
+                    className="w-full p-3 bg-gray-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Leave Type</label>
+                  <select 
+                    value={editForm.type}
+                    onChange={(e) => setEditForm({...editForm, type: e.target.value})}
+                    className="w-full p-3 bg-gray-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                  >
+                    <option value="FULL">Full Day</option>
+                    <option value="HALF">Half Day</option>
+                    <option value="EARLY">Early Leave</option>
+                    <option value="LATE">Late Arrival</option>
+                    <option value="WORK_FROM_HOME">WFH</option>
+                  </select>
+                </div>
+                {(editForm.type === 'HALF' || editForm.type === 'EARLY' || editForm.type === 'LATE') && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2"><Clock className="w-3 h-3" /> Timing</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. 09:00 AM"
+                      value={editForm.startTime}
+                      onChange={(e) => setEditForm({...editForm, startTime: e.target.value})}
+                      className="w-full p-3 bg-gray-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2"><FileText className="w-3 h-3" /> Reason for Leave</label>
+                <textarea 
+                  value={editForm.reason}
+                  onChange={(e) => setEditForm({...editForm, reason: e.target.value})}
+                  className="w-full p-4 bg-gray-50 dark:bg-slate-800 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white min-h-[120px]"
+                />
+              </div>
+
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-xl text-center">
+                <p className="text-xs text-amber-700 dark:text-amber-500 italic">
+                  Updating this request will alert the management and reset the status to <strong>PENDING</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t flex justify-end space-x-3">
+              <button onClick={() => setEditingLeave(null)} className="px-4 py-2 text-sm font-semibold text-gray-500 hover:text-gray-700">Cancel</button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSubmitting}
+                className="flex items-center space-x-2 px-8 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold disabled:opacity-50 transition-all shadow-lg shadow-indigo-200 dark:shadow-none"
+              >
+                {isSubmitting ? (
+                  <RefreshCcw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                <span>Update Request & Notify</span>
               </button>
             </div>
           </div>

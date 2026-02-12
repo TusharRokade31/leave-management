@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useMemo } from "react";
-import { Upload, Users, LogOut, AlertTriangle } from "lucide-react"; // Added Icons
+import { Upload, Users, LogOut, AlertTriangle } from "lucide-react"; 
 import { useAuth } from "@/hooks/useAuth";
 import { useLeaves } from "@/hooks/useLeaves";
 import { useDashboardLeaves } from "@/hooks/useDashboardLeave";
@@ -13,24 +13,20 @@ import { ManagerLeaveTable } from "@/components/ManagerLeaveTable";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { BulkUploadModal } from "@/components/BulkUploadModal";
 import { UserManagementModal } from "@/components/UserManagementModal";
-import { OffboardingAlert } from "@/components/OffboardingAlert"; // NEW IMPORT
+import { OffboardingAlert } from "@/components/OffboardingAlert"; 
 import { LoginForm } from "@/components/LoginForm";
 import { LeaveFormData } from "@/type/form";
-import LeaveTable from "@/components/LeaveTable";
 import EmployeeWorkStatusTable from "@/components/EmployeeWorkStatusTable";
 import { EmployeeCalendar } from "@/components/EmployeeCalendar";
-import { EmployeeTaskMonitor } from "@/components/EmployeeTaskMonitor";
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
 
 export default function Home() {
   const { currentUser, loading, login, otpLogin, logout } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
-  // Refs
   const taskMonitorRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<any>(null);
 
-  // Scroll Function
   const scrollToTaskMonitor = () => {
     taskMonitorRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -38,31 +34,28 @@ export default function Home() {
   const leaveHooks = useLeaves(currentUser);
   const leavedashboard = useDashboardLeaves(currentUser, currentMonth);
   
-  // Hooks for Work Status & Users
   const { 
     employees, 
     loading: workStatusLoading, 
     updateTaskFeedback,
     addUser,
     updateUser, 
-    deleteUser 
+    deleteUser,
+    refreshData 
   } = useEmployeeWorkStatus(currentUser, currentMonth);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false); // NEW STATE FOR POPUP
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Logic: Filter employees based on End Date vs Current Month
   const visibleEmployees = useMemo(() => {
     return employees.filter(emp => {
       if (!emp.user.endDate) return true;
-      
       const userEndDate = new Date(emp.user.endDate);
       const viewDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const endMonthDate = new Date(userEndDate.getFullYear(), userEndDate.getMonth(), 1);
-      
       return viewDate <= endMonthDate;
     });
   }, [employees, currentMonth]);
@@ -72,18 +65,109 @@ export default function Home() {
   const handleOTPLogin = async (email: string, otp: string) =>
     await otpLogin(email, otp);
   
-  const handleLogout = () => {
-    logout();
-    setShowLogoutConfirm(false); // Close popup on actual logout
-    setShowLeaveForm(false);
-    setShowNotifications(false);
-    setShowBulkUpload(false);
-    setShowUserManagement(false);
+  // ================= LOGOUT HANDLER (Ensuring clean exit) =================
+  const handleLogout = async () => {
+    try {
+      await logout(); // Call the auth hook logout
+      
+      // Force UI state resets
+      setShowLogoutConfirm(false);
+      setShowLeaveForm(false);
+      setShowNotifications(false);
+      setShowBulkUpload(false);
+      setShowUserManagement(false);
+      
+      toast.info("Logged out successfully");
+      
+      // Optional: If the hook doesn't redirect, manually refresh to clear all data
+      // window.location.reload(); 
+    } catch (error) {
+      console.error("Logout failed:", error);
+      toast.error("Logout failed. Please clear your browser cache.");
+    }
   };
 
   const handleLeaveSubmit = async (formData: LeaveFormData) => {
     await leaveHooks.createLeave(formData);
     setShowLeaveForm(false);
+  };
+
+  const handleLeaveUpdate = async (leaveId: number, updatedData: any) => {
+    try {
+      const response = await fetch(`/api/leaves/${leaveId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update leave');
+      }
+
+      toast.success("Leave request updated successfully!");
+      if (leaveHooks.fetchLeaves) await leaveHooks.fetchLeaves();
+    } catch (error: any) {
+      console.error("Error updating leave:", error);
+      toast.error(error.message || "Could not update leave request");
+    }
+  };
+
+  const handleUpdateComment = async (leaveId: number, comment: string) => {
+    try {
+      const response = await fetch(`/api/leaves/${leaveId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          managerComment: comment,
+          commentOnly: true 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save comment');
+      }
+
+      toast.success("Comment saved successfully");
+      if (leaveHooks.fetchLeaves) await leaveHooks.fetchLeaves();
+    } catch (error: any) {
+      console.error("Error saving comment:", error);
+      toast.error(error.message || "Could not save comment");
+      throw error;
+    }
+  };
+
+  const handleUpdateDayLeaveStatus = async (
+    leaveId: number, 
+    targetDate: string, 
+    newType: string, 
+    newStatus: string, 
+    comment: string
+  ) => {
+    try {
+      const response = await fetch(`/api/leaves/${leaveId}/split`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetDate, newType, newStatus, comment }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update specific day');
+      }
+
+      toast.success("Work status updated and synced!");
+      
+      if (leaveHooks.fetchLeaves) await leaveHooks.fetchLeaves();
+      if (refreshData) await refreshData(); 
+      
+      return true;
+    } catch (error: any) {
+      console.error("Error splitting leave:", error);
+      toast.error(error.message || "Process failed");
+      return false;
+    }
   };
 
   if (loading) {
@@ -105,7 +189,7 @@ export default function Home() {
       <ToastContainer position="top-right" autoClose={3000} />
       <Header
         currentUser={currentUser}
-        onLogout={() => setShowLogoutConfirm(true)} // UPDATED TO SHOW POPUP
+        onLogout={() => setShowLogoutConfirm(true)} 
         onNotificationClick={() => setShowNotifications(true)}
         notificationCount={
           currentUser.role === "MANAGER" ? pendingLeaves.length : 0
@@ -144,8 +228,9 @@ export default function Home() {
               )}
 
               <EmployeeLeaveTable
-                leaves={leaveHooks.leaves}
+                leaves={leaveHooks.leaves as any}
                 onDelete={leaveHooks.deleteLeave}
+                onUpdate={handleLeaveUpdate}
               />
             </div>
 
@@ -172,9 +257,8 @@ export default function Home() {
         {/* ================= MANAGER VIEW ================= */}
         {!leaveHooks.loading && currentUser.role === "MANAGER" && (
           <div className="space-y-12">
-            {/* ========== NEW: OFFBOARDING ALERT ========== */}
             <OffboardingAlert 
-              employees={employees}
+              employees={employees as any}
               onManageClick={() => setShowUserManagement(true)}
             />
 
@@ -197,6 +281,7 @@ export default function Home() {
                     onClick={scrollToTaskMonitor}
                     className="px-6 py-2.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl flex items-center gap-2 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-all active:scale-95 shadow-sm"
                   >
+                    <Users className="w-4 h-4" />
                     Monitor Tasks ↓
                   </button>
 
@@ -215,7 +300,7 @@ export default function Home() {
                   Awaiting Action
                 </h3>
                 <ManagerLeaveTable
-                  leaves={leaveHooks.leaves}
+                  leaves={leaveHooks.leaves as any} 
                   currentMonth={currentMonth}
                   onMonthChange={setCurrentMonth}
                   onApprove={(id, comment) =>
@@ -224,6 +309,7 @@ export default function Home() {
                   onReject={(id, comment) =>
                     leaveHooks.updateLeaveStatus(id, "REJECTED", comment)
                   }
+                  onUpdateComment={handleUpdateComment} 
                 />
               </div>
 
@@ -240,10 +326,11 @@ export default function Home() {
                   </div>
                 ) : (
                   <EmployeeWorkStatusTable
-                    employees={visibleEmployees}
+                    employees={visibleEmployees as any}
                     currentMonth={currentMonth}
                     onMonthChange={setCurrentMonth}
                     onUpdateFeedback={updateTaskFeedback}
+                    onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
                   />
                 )}
               </div>
@@ -288,7 +375,7 @@ export default function Home() {
       {/* Modals */}
       {showNotifications && currentUser.role === "MANAGER" && (
         <NotificationPanel
-          recentRequests={pendingLeaves}
+          recentRequests={pendingLeaves as any}
           onClose={() => setShowNotifications(false)}
         />
       )}
@@ -297,7 +384,7 @@ export default function Home() {
       )}
       {showUserManagement && currentUser.role === "MANAGER" && (
         <UserManagementModal 
-          employees={employees}
+          employees={employees as any}
           onAdd={addUser}
           onUpdate={updateUser}
           onDelete={deleteUser}

@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
         email,
         password: hashedPassword,
         role: role || 'EMPLOYEE',
+        isActive: true, // Ensures new users are active by default
       },
     });
 
@@ -89,30 +90,5 @@ export async function PATCH(req: NextRequest) {
   } catch (error: any) {
     console.error("PATCH Error:", error.message);
     return NextResponse.json({ error: 'Update failed', details: error.message }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: NextRequest) {
-  try {
-    const authUser = authenticateToken(req);
-    if (!authUser || authUser.role !== 'MANAGER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
-
-    await prisma.user.delete({
-      where: { id: Number(userId) },
-    });
-
-    return NextResponse.json({ message: 'User deleted successfully' });
-  } catch (error: any) {
-    console.error("DELETE Error:", error.message);
-    return NextResponse.json({ error: 'Delete failed', details: error.message }, { status: 500 });
   }
 }
