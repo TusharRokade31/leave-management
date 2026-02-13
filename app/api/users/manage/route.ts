@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
         email,
         password: hashedPassword,
         role: role || 'EMPLOYEE',
-        isActive: true, // Ensures new users are active by default
       },
     });
 
