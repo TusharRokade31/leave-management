@@ -42,24 +42,32 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onOTPLogin }) => 
   /**
    * Centralized submit handler to capture "Enter" key via form submission
    */
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); // Prevent page reload
+const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); 
+    
+    // 1. Handle Password Login
     if (loginMode === 'password') {
       await handlePasswordLogin();
-    } else if (loginMode === 'forgot') {
+      return;
+    }
+
+    // 2. Handle OTP Send (Unified for both OTP Login and Forgot Password)
+    if (!otpSent) {
+      await handleSendOTP();
+      return;
+    }
+
+    // 3. Handle Final Actions (After OTP is sent)
+    if (loginMode === 'forgot') {
       await handleResetPassword();
-    } else if (loginMode === 'otp') {
-      if (!otpSent) {
-        await handleSendOTP();
-      } else if (onOTPLogin) {
-        setError('');
-        setIsLoading(true);
-        try {
-          const result = await onOTPLogin(otpForm.email, otpForm.otp);
-          if (!result.success) setError(result.error || 'OTP Login failed');
-        } finally {
-          setIsLoading(false);
-        }
+    } else if (loginMode === 'otp' && onOTPLogin) {
+      setError('');
+      setIsLoading(true);
+      try {
+        const result = await onOTPLogin(otpForm.email, otpForm.otp);
+        if (!result.success) setError(result.error || 'OTP Login failed');
+      } finally {
+        setIsLoading(false);
       }
     }
   };
