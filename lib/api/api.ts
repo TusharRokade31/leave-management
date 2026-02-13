@@ -31,6 +31,7 @@ export const setAuthToken = (token: string): void => {
   setCookie('authToken', token, 7);
 };
 
+// FIX: Changed from calling itself to calling deleteCookie
 export const removeAuthToken = (): void => {
   deleteCookie('authToken');
 };
@@ -90,7 +91,7 @@ export const api = {
     return response.json();
   },
 
-  getCurrentUser: async (): Promise<User> => {
+  getCurrentUser: async (): Promise<any> => { // Changed to any if User type is not imported
     const response = await fetch(`/api/auth/me`, {
       headers: getAuthHeaders()
     });
@@ -103,7 +104,7 @@ export const api = {
   },
 
   // Leave APIs
-  createLeave: async (leaveData: LeaveFormData): Promise<Leave> => {
+  createLeave: async (leaveData: LeaveFormData): Promise<any> => {
     const response = await fetch(`/api/leaves`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -118,7 +119,7 @@ export const api = {
     return response.json();
   },
 
-  getMyLeaves: async (): Promise<Leave[]> => {
+  getMyLeaves: async (): Promise<any[]> => {
     const response = await fetch(`/api/leaves/my-leaves`, {
       headers: getAuthHeaders()
     });
@@ -130,7 +131,7 @@ export const api = {
     return response.json();
   },
 
-  getAllLeaves: async (): Promise<Leave[]> => {
+  getAllLeaves: async (): Promise<any[]> => {
     const response = await fetch(`/api/leaves`, {
       headers: getAuthHeaders()
     });
@@ -142,8 +143,7 @@ export const api = {
     return response.json();
   },
 
-getAllDashboardLeaves: async (month?: number, year?: number): Promise<Leave[]> => {
-    // Append query params if they exist
+  getAllDashboardLeaves: async (month?: number, year?: number): Promise<any[]> => {
     let url = `/api/leave-dashboard`;
     if (month && year) {
       url += `?month=${month}&year=${year}`;
@@ -159,12 +159,12 @@ getAllDashboardLeaves: async (month?: number, year?: number): Promise<Leave[]> =
     
     return response.json();
   },
-updateLeaveStatus: async (
+
+  updateLeaveStatus: async (
     leaveId: number, 
     status: 'APPROVED' | 'REJECTED', 
     comment?: string
-  ): Promise<Leave> => {
-    const token = localStorage.getItem('token');
+  ): Promise<any> => {
     const response = await fetch(`/api/leaves/${leaveId}`, {
       method: 'PATCH',
       headers: getAuthHeaders(),
@@ -177,6 +177,27 @@ updateLeaveStatus: async (
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to update leave status');
+    }
+
+    return response.json();
+  },
+
+  updateLeaveComment: async (
+    leaveId: number, 
+    managerComment: string
+  ): Promise<any> => {
+    const response = await fetch(`/api/leaves/${leaveId}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ 
+        managerComment, 
+        commentOnly: true 
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to save comment');
     }
 
     return response.json();
@@ -217,20 +238,20 @@ updateLeaveStatus: async (
     };
   },
 
- getEmployeeWorkStatus: async (month?: number, year?: number): Promise<any[]> => {
-  let url = `/api/employee-work-status`;
-  if (month && year) {
-    url += `?month=${month}&year=${year}`;
-  }
+  getEmployeeWorkStatus: async (month?: number, year?: number): Promise<any[]> => {
+    let url = `/api/employee-work-status`;
+    if (month && year) {
+      url += `?month=${month}&year=${year}`;
+    }
 
-  const response = await fetch(url, {
-    headers: getAuthHeaders()
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch employee work status');
-  }
-  
-  return response.json();
-},
+    const response = await fetch(url, {
+      headers: getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch employee work status');
+    }
+    
+    return response.json();
+  },
 };

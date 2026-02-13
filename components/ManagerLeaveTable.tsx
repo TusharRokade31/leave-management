@@ -10,18 +10,44 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Calendar,
-  Loader2 
+  Loader2,
+  History, 
+  MessageSquare, 
+  Send,
+  AlertTriangle 
 } from 'lucide-react';
 import { getStatusIcon } from '../utils/getStatusIcon';
 import { formatDate } from '@/utils/formatDate';
 import { getStatusColor } from '@/utils/getStatusColors';
 import { toast } from 'react-toastify';
 
+interface Leave {
+  id: number;
+  userId: number;
+  startDate: string; 
+  endDate: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  reason: string;
+  type: string;
+  days: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  managerComment?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  isEdited?: boolean;
+  editSummary?: string | null;
+  user?: {
+    name: string | null;
+    email?: string;
+  };
+}
 
 interface ManagerLeaveTableProps {
   leaves: Leave[];
   onApprove: (leaveId: number, comment?: string) => Promise<void>;
   onReject: (leaveId: number, comment?: string) => Promise<void>;
+  onUpdateComment: (leaveId: number, comment: string) => Promise<void>; 
   currentMonth: Date;
   onMonthChange: (date: Date) => void;
 }
@@ -39,6 +65,7 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
   leaves, 
   onApprove, 
   onReject,
+  onUpdateComment,
   currentMonth,
   onMonthChange 
 }) => {
@@ -52,7 +79,10 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
   const [actionLeaveId, setActionLeaveId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const formatRequestedTime = (timestamp: string): string => {
+  const [viewModalComment, setViewModalComment] = useState('');
+  const [isSavingComment, setIsSavingComment] = useState(false);
+
+  const formatRequestedTime = (timestamp: string | Date): string => {
     const date = new Date(timestamp);
     return date.toLocaleString('en-GB', {
       day: '2-digit',
@@ -108,7 +138,7 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
   const handleActionClick = (leaveId: number, action: 'approve' | 'reject') => {
     setActionLeaveId(leaveId);
     setCurrentAction(action);
-    setComment('');
+    setComment(viewModalComment || ''); 
     setShowCommentModal(true);
   };
 
@@ -131,11 +161,27 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
         setComment('');
         setActionLeaveId(null);
         setCurrentAction(null);
+        setSelectedLeave(null); 
       } catch (error) {
         console.error('Error processing leave:', error);
       } finally {
         setIsSubmitting(false);
       }
+  };
+
+  const handleStandaloneCommentSave = async () => {
+    if (!selectedLeave || viewModalComment === (selectedLeave.managerComment || '')) return;
+    
+    setIsSavingComment(true);
+    try {
+      await onUpdateComment(selectedLeave.id, viewModalComment);
+      toast.success('Comment updated successfully');
+      setSelectedLeave({ ...selectedLeave, managerComment: viewModalComment });
+    } catch (error) {
+      toast.error('Failed to save comment');
+    } finally {
+      setIsSavingComment(false);
+    }
   };
 
   const uniqueEmployees = Array.from(new Set(leaves.map(l => l.user?.name).filter(Boolean)));
@@ -159,11 +205,8 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
 
   return (
     <>
-      {/* Search Bar & Month Navigation */}
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 p-4 mb-4 transition-colors duration-300">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          
-          {/* Month Navigation */}
           <div className="flex items-center space-x-4 bg-gray-50 dark:bg-slate-800 p-2 rounded-lg transition-colors">
             <button onClick={prevMonth} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded shadow-sm transition-all">
               <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-slate-300" />
@@ -179,7 +222,6 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
             </button>
           </div>
 
-          {/* Search */}
           <div className="flex items-center space-x-3 flex-1">
             <div className="flex-1 relative">
               <input
@@ -208,7 +250,6 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
         </div>
       </div>
 
-      {/* Leave Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden transition-colors duration-300">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -255,6 +296,11 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
                           🕐 {formatLeaveTime(leave)}
                         </div>
                       )}
+                      {leave.isEdited && (
+                        <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-500 font-black uppercase italic mt-1 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/30 rounded border border-amber-100 dark:border-amber-800">
+                          <History size={10} /> Edited
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 dark:text-slate-300 capitalize">
                       {leave.type === 'WORK_FROM_HOME' ? 'WFH' : leave.type.toLowerCase()}
@@ -264,7 +310,10 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
                       <div className="max-w-xs">
                         <p className="truncate">{leave.reason}</p>
                         <button
-                          onClick={() => setSelectedLeave(leave)}
+                          onClick={() => {
+                            setSelectedLeave(leave);
+                            setViewModalComment(leave.managerComment || '');
+                          }}
                           className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs font-bold flex items-center space-x-1 mt-1"
                         >
                           <Eye className="w-3 h-3" />
@@ -285,14 +334,20 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
                       {leave.status === 'PENDING' && (
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => handleActionClick(leave.id, 'approve')}
+                            onClick={() => {
+                              setSelectedLeave(leave);
+                              handleActionClick(leave.id, 'approve');
+                            }}
                             className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-all active:scale-90 shadow-sm border border-transparent hover:border-green-100"
                             title="Approve"
                           >
                             <CheckCircle className="w-5 h-5" />
                           </button>
                           <button
-                            onClick={() => handleActionClick(leave.id, 'reject')}
+                            onClick={() => {
+                              setSelectedLeave(leave);
+                              handleActionClick(leave.id, 'reject');
+                            }}
                             className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all active:scale-90 shadow-sm border border-transparent hover:border-red-100"
                             title="Reject"
                           >
@@ -309,13 +364,12 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
         </div>
       </div>
       
-      {/* Confirmation Modal with Loader */}
       {showCommentModal && (
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 dark:border-slate-800">
             <div className={`${currentAction === 'approve' ? 'bg-green-600 dark:bg-green-700' : 'bg-red-600 dark:bg-red-700'} text-white px-6 py-5 rounded-t-xl flex items-center justify-between`}>
               <h3 className="text-lg font-black uppercase tracking-tight">
-                {currentAction === 'approve' ? 'Approve Request' : 'Reject Request'}
+                {currentAction === 'approve' ? 'Final Approval' : 'Reject Request'}
               </h3>
               <button
                 onClick={() => !isSubmitting && setShowCommentModal(false)}
@@ -329,7 +383,7 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
             <div className="px-6 py-6 space-y-4">
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-slate-400 mb-2">
-                  Add Feedback {currentAction === 'reject' && <span className="text-red-500">*</span>}
+                  Final Feedback {currentAction === 'reject' && <span className="text-red-500">*</span>}
                   {currentAction === 'approve' && <span className="text-gray-400 ml-1">(Optional)</span>}
                 </label>
                 <textarea
@@ -385,12 +439,19 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
         </div>
       )}
 
-      {/* View Full Detail Modal */}
-      {selectedLeave && (
+      {selectedLeave && !showCommentModal && (
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
-            <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-6 py-5 flex items-center justify-between">
-              <h3 className="text-lg font-black uppercase tracking-tight text-gray-900 dark:text-white">Leave Request Details</h3>
+            <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-6 py-5 flex items-center justify-between z-20">
+              <div>
+                <h3 className="text-lg font-black uppercase tracking-tight text-gray-900 dark:text-white">Leave Request Details</h3>
+                {selectedLeave.isEdited && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-500 font-black italic flex items-center gap-1 mt-1">
+                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+                    Updated details at {formatRequestedTime(selectedLeave.updatedAt)}
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => !isSubmitting && setSelectedLeave(null)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 transition-all p-1"
@@ -401,6 +462,22 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
             </div>
             
             <div className="px-6 py-6 space-y-6 overflow-y-auto custom-scrollbar">
+              
+              {/* MODIFICATION ALERT BOX */}
+              {selectedLeave.isEdited && selectedLeave.editSummary && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-start gap-3 shadow-sm ring-1 ring-amber-500/20">
+                  <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest mb-1">Management Alert: Modification Summary</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 font-bold leading-relaxed italic">
+                      "{selectedLeave.editSummary}"
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-8">
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Employee</label>
@@ -412,12 +489,13 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
                 </div>
               </div>
               
+              {/* Highlightable Date Grid with Amber Rings */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-5 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-gray-100 dark:border-slate-700">
-                <div>
+                <div className={`p-2 rounded-lg transition-all ${selectedLeave.editSummary?.toLowerCase().includes('date') ? 'ring-2 ring-amber-400 dark:ring-amber-500/50 bg-amber-50/30 dark:bg-amber-900/10' : ''}`}>
                   <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-1 block">Start Date</label>
                   <p className="text-gray-900 dark:text-slate-200 font-bold">{formatDate(selectedLeave.startDate)}</p>
                 </div>
-                <div>
+                <div className={`p-2 rounded-lg transition-all ${selectedLeave.editSummary?.toLowerCase().includes('date') ? 'ring-2 ring-amber-400 dark:ring-amber-500/50 bg-amber-50/30 dark:bg-amber-900/10' : ''}`}>
                   <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-1 block">End Date</label>
                   <p className="text-gray-900 dark:text-slate-200 font-bold">{formatDate(selectedLeave.endDate)}</p>
                 </div>
@@ -431,7 +509,7 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
               )}
 
               <div className="grid grid-cols-3 gap-6">
-                <div>
+                <div className={`p-2 rounded-lg transition-all ${selectedLeave.editSummary?.toLowerCase().includes('type') ? 'ring-2 ring-amber-400 dark:ring-amber-500/50 bg-amber-50/30 dark:bg-amber-900/10' : ''}`}>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Type</label>
                   <p className="text-gray-900 dark:text-slate-200 capitalize font-bold">{selectedLeave.type.toLowerCase()}</p>
                 </div>
@@ -452,19 +530,44 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
 
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Reason for Request</label>
-                <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
-                  <p className="text-gray-900 dark:text-slate-300 whitespace-pre-wrap leading-relaxed italic">{selectedLeave.reason}</p>
+                <div className={`p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 transition-all ${selectedLeave.editSummary?.toLowerCase().includes('reason') ? 'border-amber-400 ring-2 ring-amber-400' : ''}`}>
+                  <p className="text-gray-900 dark:text-slate-300 whitespace-pre-wrap leading-relaxed italic">"{selectedLeave.reason}"</p>
+                </div>
+              </div>
+
+              <div className="p-6 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 space-y-4">
+                <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                  <MessageSquare size={18} />
+                  <h4 className="text-xs font-black uppercase tracking-widest">Discussion / Feedback</h4>
+                </div>
+                
+                <div className="relative">
+                  <textarea
+                    value={viewModalComment}
+                    onChange={(e) => setViewModalComment(e.target.value)}
+                    placeholder="Type a message or request clarification here..."
+                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-indigo-100 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none text-sm min-h-[100px]"
+                  />
+                  <div className="flex justify-between items-center mt-2">
+                    <p className="text-[10px] text-gray-400 italic">This message will be visible to the employee immediately.</p>
+                    <button
+                      onClick={handleStandaloneCommentSave}
+                      disabled={isSavingComment || viewModalComment === (selectedLeave.managerComment || '')}
+                      className="px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2 shadow-md"
+                    >
+                      {isSavingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      Save Comment Only
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Action Buttons inside View Modal */}
              {selectedLeave.status === 'PENDING' && (
               <div className="sticky bottom-0 bg-gray-50 dark:bg-slate-800/80 backdrop-blur-md px-6 py-4 flex justify-end space-x-3 border-t border-gray-200 dark:border-slate-700">
                 <button
                   onClick={() => {
                     const id = selectedLeave.id;
-                    setSelectedLeave(null); 
                     handleActionClick(id, 'reject');
                   }}
                   disabled={isSubmitting}
@@ -476,7 +579,6 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
                 <button
                   onClick={() => {
                     const id = selectedLeave.id;
-                    setSelectedLeave(null); 
                     handleActionClick(id, 'approve');
                   }}
                   disabled={isSubmitting}
@@ -491,7 +593,6 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
         </div>
       )}
 
-      {/* Stats Modal */}
       {showStatsModal && employeeStats && (
         <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 dark:border-slate-800">

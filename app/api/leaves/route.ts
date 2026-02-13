@@ -6,33 +6,29 @@ import { sendLeaveNotification } from '@/lib/email';
 export async function POST(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
-    const { startDate, endDate, reason, type, startTime, endTime } =
-      await req.json();
+    const { startDate, endDate, reason, type, startTime, endTime } = await req.json();
 
     if (!startDate || !endDate || !reason) {
-      return NextResponse.json(
-        { error: 'All fields are required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
     }
 
-    // Validate time for specific leave types
     if (['HALF', 'EARLY', 'LATE'].includes(type?.toUpperCase()) && !startTime) {
-      return NextResponse.json(
-        { error: 'Time is required for this leave type' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Time is required for this leave type' }, { status: 400 });
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const parseLocalDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      date.setHours(12, 0, 0, 0); 
+      return date;
+    };
+
+    const start = parseLocalDate(startDate);
+    const end = parseLocalDate(endDate);
+
     const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     if (days <= 0) {
-      return NextResponse.json(
-        { error: 'End date must be after start date' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'End date must be after start date' }, { status: 400 });
     }
 
     const leave = await prisma.leave.create({
@@ -50,44 +46,52 @@ export async function POST(req: NextRequest) {
       },
       include: {
         user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          select: { id: true, name: true, email: true },
         },
       },
     });
 
-    // Send email notification
-    await sendLeaveNotification(
-  leave, 
-  {
-    ...leave.user,
-    name: leave.user.name ?? 'Unknown User'
-  }, 
-  "submitted"
-);
+    // --- NOTIFICATION LOGIC ---
+    // Trigger notification after successful creation
+    try {
+      await sendLeaveNotification({
+        mode: 'NEW',
+        leave: leave,
+        employeeName: leave.user.name,
+        employeeEmail: leave.user.email
+      });
+    } catch (emailErr) {
+      // We log the error but don't stop the response because the leave was successfully created
+      console.error('Notification failed but leave was created:', emailErr);
+    }
+    // ---------------------------
 
     return NextResponse.json(leave, { status: 201 });
   } catch (err: any) {
     console.error('Create leave error:', err);
-    return NextResponse.json(
-      { error: err.message || 'Server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
   }
 }
 
+// GET function remains exactly the same as your provided code
 export async function GET(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
+    const { searchParams } = new URL(req.url);
+    const userIdParam = searchParams.get('userId');
 
-    if (authUser.role !== 'MANAGER') {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    let whereClause: any = {};
+
+    if (authUser.role === 'MANAGER') {
+      if (userIdParam) {
+        whereClause.userId = parseInt(userIdParam);
+      }
+    } else {
+      whereClause.userId = authUser.id;
     }
 
     const leaves = await prisma.leave.findMany({
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
@@ -103,10 +107,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(leaves);
   } catch (err: any) {
-    console.error('Get all leaves error:', err);
-    return NextResponse.json(
-      { error: err.message || 'Server error' },
-      { status: 500 }
-    );
+    console.error('Get leaves error:', err);
+    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
   }
 }

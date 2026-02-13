@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, forwardRef, useImperativeHandle } from "react";
-import ReactDOM from "react-dom"; // Required for the patch
+import ReactDOM from "react-dom";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { format, isSameDay, isBefore, startOfDay } from "date-fns";
@@ -9,7 +9,7 @@ import { getAuthToken } from "@/lib/api/api";
 import { canEditDate, isFutureDate } from "@/utils/date";
 import useSWR from "swr";
 
-// Dynamic import for React Quill to prevent SSR issues
+// Dynamic import for React Quill
 import dynamic from 'next/dynamic';
 const ReactQuill = dynamic(() => import('react-quill'), { 
   ssr: false,
@@ -18,7 +18,6 @@ const ReactQuill = dynamic(() => import('react-quill'), {
 import 'react-quill/dist/quill.snow.css';
 
 // --- REACT 19 COMPATIBILITY PATCH ---
-// React Quill uses findDOMNode which was removed in React 19.
 if (typeof window !== "undefined") {
   // @ts-ignore
   if (!ReactDOM.findDOMNode) {
@@ -56,6 +55,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
   const [currentPointers, setCurrentPointers] = useState("");
   const [currentComment, setCurrentComment] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isMissingTask, setIsMissingTask] = useState(false); // New state to track tile color sync
 
   const url = employeeId ? `/api/tasks?userId=${employeeId}` : "/api/tasks";
   const { data: tasks = {}, mutate } = useSWR(url, fetcher, {
@@ -73,6 +73,12 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
     if (!viewOnly && isFutureDate(date)) return;
     const dateKey = format(date, "yyyy-MM-dd");
     const existingTask = tasks[dateKey];
+    
+    // Check if the tile clicked was a "missing" (red) tile
+    const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
+    const missing = isPast && !existingTask?.content && !viewOnly;
+    
+    setIsMissingTask(missing);
     setSelectedDate(date);
     setCurrentPointers(existingTask?.content || "");
     setCurrentComment(existingTask?.managerComment || "");
@@ -123,21 +129,26 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
         .dark .react-calendar {
           background-color: transparent !important;
           border: none !important;
-          color: #f1f5f9 !important;
+          color: #ffffff !important;
         }
-        .dark .react-calendar__tile { color: #94a3b8 !important; }
+        .dark .react-calendar__tile { color: #ffffff !important; font-weight: 600; }
+        .dark .react-calendar__month-view__weekdays__weekday abbr { color: #94a3b8 !important; text-decoration: none; }
+        
+        .react-calendar__navigation button:enabled:hover,
+        .react-calendar__navigation button:enabled:focus {
+          background-color: transparent !important;
+        }
+
         .dark .react-calendar__tile:enabled:hover {
           background-color: #1e293b !important;
           border-radius: 12px;
         }
-        .dark .react-calendar__navigation button { color: #f1f5f9 !important; background: none; }
+        .dark .react-calendar__navigation button { color: #ffffff !important; background: none; }
         
-        /* State Visuals */
         .task-added { background-color: #2563eb !important; color: white !important; border-radius: 12px !important; }
         .task-missing { background-color: #ef4444 !important; color: white !important; border-radius: 12px !important; }
         .tile-today-focus { border: 2px solid #2563eb !important; border-radius: 12px !important; }
 
-        /* Quill Theme Overrides */
         .dark .ql-toolbar { 
           background: #1e293b; 
           border-color: #334155 !important; 
@@ -149,12 +160,13 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
           border-color: #334155 !important; 
           border-bottom-left-radius: 12px; 
           border-bottom-right-radius: 12px; 
-          color: #f1f5f9; 
+          color: #f8fafc !important; 
         }
         .dark .ql-stroke { stroke: #94a3b8 !important; }
         .dark .ql-fill { fill: #94a3b8 !important; }
         .dark .ql-picker { color: #94a3b8 !important; }
         .ql-editor { min-height: 200px; font-size: 16px; }
+        .ql-editor.ql-blank::before { color: #64748b !important; }
       `}</style>
 
       <div className="flex justify-center">
@@ -171,11 +183,9 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
             const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
             
             let classes = "custom-tile transition-all duration-200 ";
-
             if (isSameDay(date, new Date())) classes += "tile-today-focus ";
             if (hasTask) classes += "task-added ";
             else if (isPast && !viewOnly) classes += "task-missing ";
-
             return classes;
           }}
           className="minimal-white-calendar-wide"
@@ -192,7 +202,13 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 dark:bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           <div className="relative bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-transparent dark:border-slate-800">
-            <div className="relative bg-gradient-to-br from-blue-600 to-blue-800 dark:from-indigo-900 dark:to-slate-900 p-8 text-white">
+            
+            {/* Dynamic Header Gradient: Red if missing, Blue otherwise */}
+            <div className={`relative p-8 text-white transition-colors duration-500 ${
+              isMissingTask 
+                ? "bg-gradient-to-br from-red-500 to-red-700 dark:from-red-900 dark:to-slate-900" 
+                : "bg-gradient-to-br from-blue-600 to-blue-800 dark:from-indigo-900 dark:to-slate-900"
+            }`}>
               <button 
                 onClick={() => setShowModal(false)} 
                 className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 dark:bg-slate-800/50 rounded-full transition-all z-50 cursor-pointer"
@@ -201,11 +217,11 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
               </button>
               <div className="flex items-center gap-3 mb-2 opacity-80">
                 <CalendarIcon size={16} />
-                <span className="text-[10px] font-black uppercase tracking-widest">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">
                   {viewOnly ? "Review Activity" : "Update Schedule"}
                 </span>
               </div>
-              <h3 className="text-3xl font-black tracking-tight">{format(selectedDate, "MMMM dd")}</h3>
+              <h3 className="text-3xl font-black tracking-tight text-white">{format(selectedDate, "MMMM dd")}</h3>
             </div>
             
             <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
@@ -217,7 +233,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
               )}
 
               <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase tracking-widest text-blue-400 dark:text-blue-500">Task Log</label>
+                <label className={`text-[10px] font-black uppercase tracking-widest ${isMissingTask ? 'text-red-500' : 'text-blue-500 dark:text-indigo-400'}`}>Task Log</label>
                 <div className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-200 dark:border-slate-700 shadow-sm">
                   <ReactQuill 
                     theme="snow"
@@ -238,7 +254,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                 <textarea
                   className={`w-full h-24 rounded-2xl p-5 outline-none transition-all resize-none font-medium border-2 ${
                     viewOnly 
-                      ? "bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900/30 focus:bg-white dark:focus:bg-slate-800 focus:border-orange-200 dark:focus:border-orange-500 text-zinc-800 dark:text-slate-200" 
+                      ? "bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900/40 focus:bg-white dark:focus:bg-slate-800 focus:border-orange-200 dark:focus:border-orange-500 text-slate-800 dark:text-slate-100" 
                       : "bg-gray-100 dark:bg-slate-800 border-transparent cursor-not-allowed text-gray-500 dark:text-slate-500"
                   }`}
                   readOnly={!viewOnly}
@@ -255,7 +271,9 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                   className={`flex items-center justify-center gap-3 w-full font-bold py-5 rounded-2xl transition-all active:scale-[0.98] disabled:opacity-30 shadow-lg ${
                     viewOnly 
                       ? "bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white shadow-orange-100 dark:shadow-none" 
-                      : "bg-blue-600 hover:bg-blue-700 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white shadow-blue-100 dark:shadow-none"
+                      : isMissingTask 
+                        ? "bg-red-600 hover:bg-red-700 text-white shadow-red-100 dark:shadow-none"
+                        : "bg-blue-600 hover:bg-blue-700 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white shadow-blue-100 dark:shadow-none"
                   }`}
                 >
                   <Save size={18} /> {isSaving ? "Saving..." : viewOnly ? "Save Feedback" : "Save Daily Log"}
@@ -274,6 +292,6 @@ EmployeeCalendar.displayName = "EmployeeCalendar";
 const Legend = ({ color, label, isFilled = false }: { color: string; label: string; isFilled?: boolean }) => (
   <div className="flex items-center gap-2">
     <span className={`w-3 h-3 rounded-full ${color} ${!isFilled ? 'bg-transparent' : ''}`} />
-    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-slate-500 transition-colors">{label}</span>
+    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-slate-400 transition-colors">{label}</span>
   </div>
 );

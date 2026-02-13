@@ -5,11 +5,11 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Optional: for migrations
+  directUrl = env("DIRECT_URL")
 }
 
 /* =======================
-   ENUMS
+    ENUMS
 ======================= */
 
 enum Role {
@@ -40,59 +40,75 @@ enum AttendanceStatus {
 }
 
 /* =======================
-   MODELS
+    MODELS
 ======================= */
 
 model User {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   name      String
-  email     String   @unique
+  email     String    @unique
   password  String
-  role      Role     @default(EMPLOYEE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  role      Role      @default(EMPLOYEE)
+  endDate   DateTime? // Strictly used for the offboarding date
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
   leaves    Leave[]
   tasks     Task[]
 
   @@index([email])
+  // REMOVED: isActive index as the field no longer exists
 }
 
 model Leave {
-  id             Int         @id @default(autoincrement())
-  userId         Int
-  startDate      DateTime
-  endDate        DateTime
-  startTime      String?
-  endTime        String?
-  reason         String      @db.Text
-  type           LeaveType   @default(FULL)
-  days           Int
-  status         LeaveStatus @default(PENDING)
-  managerComment String?     @db.Text
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id              Int         @id @default(autoincrement())
+  userId          Int
+  startDate       DateTime
+  endDate         DateTime
+  startTime       String?
+  endTime         String?
+  reason          String      @db.Text
+  type            LeaveType   @default(FULL)
+  days            Int
+  status          LeaveStatus @default(PENDING)
+  managerComment  String?     @db.Text
+  
+  lastCommentedAt DateTime?   // Tracks when the manager last sent feedback
 
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // --- Tracking Fields ---
+  isEdited        Boolean     @default(false)
+  editSummary     String?     @db.Text
+  
+  // ADDED: For the Split functionality
+  isSplit         Boolean     @default(false)    // True if this was carved out of a multi-day leave
+  originalLeaveId Int?                           // The ID of the parent leave before it was split
+  isManagerUpdated Boolean    @default(false)    // True if a manager overrode this specific day
+  // -----------------------------------------------
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
+  @@index([updatedAt])
 }
 
 model Task {
-  id               Int              @id @default(autoincrement())
-  userId           Int
-  date             DateTime
-  content          String           @db.Text
-  managerComment   String?          @db.Text
-  status           AttendanceStatus @default(PRESENT)
-  isCompleted      Boolean          @default(true)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id              Int              @id @default(autoincrement())
+  userId          Int
+  date            DateTime
+  content         String           @db.Text
+  managerComment  String?          @db.Text
+  status          AttendanceStatus @default(PRESENT)
+  isCompleted     Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, date]) // One task per user per day
+  @@unique([userId, date])
   @@index([date])
 }
 
