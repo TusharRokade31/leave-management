@@ -335,7 +335,7 @@ export default function Home() {
                 <p className="text-gray-500 dark:text-gray-400 font-medium">Are you sure you want to end your session?</p>
               </div>
               <div className="flex gap-4 pt-4">
-                <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 px-6 py-4 bg-gray-100 rounded-2xl font-bold">Stay</button>
+                <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 px-6 py-4 bg-gray-100 dark:text-black rounded-2xl font-bold">Stay</button>
                 <button onClick={handleLogout} className="flex-1 px-6 py-4 bg-red-500 text-white font-bold rounded-2xl flex items-center justify-center gap-2"><LogOut size={20} /> Logout</button>
               </div>
             </div>

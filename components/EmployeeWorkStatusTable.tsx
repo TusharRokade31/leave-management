@@ -323,6 +323,32 @@ const DayDetailModal: React.FC<{
             <div className="text-lg font-bold text-gray-800 dark:text-slate-200">{detail.status}</div>
           </div>
 
+          {detail.task && (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-sm font-black uppercase">Task Details</h3>
+              </div>
+              
+              
+                <div className="pt-2">
+                  <span className="text-gray-600 dark:text-slate-400 font-bold block mb-1">Task Content:</span>
+                  {/* FIX 1: HTML Rendering */}
+                  <div 
+                      className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-slate-200 bg-white/50 dark:bg-slate-800/50 p-3 rounded-lg border border-gray-100 dark:border-slate-700
+                        [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:my-2
+                        [&_ol]:list-decimal [&_ol]:ml-6 [&_ol]:my-2
+                        [&_li]:my-1"
+                      dangerouslySetInnerHTML={{ __html: detail.task.content }} 
+                    />
+                </div>
+                </>)}
+
+             {!detail.task?.content && (
+            <div className="bg-red-50 dark:bg-red-950/20 rounded-xl p-8 text-center border border-red-200 dark:border-red-900">
+                <p className="text-gray-500 dark:text-slate-400 text-sm font-medium italic">No activity recorded for this specific date.</p>
+            </div>
+          )}
+
           <div className="bg-amber-50 dark:bg-amber-950/20 rounded-xl p-5 border border-amber-200 dark:border-amber-900/50 space-y-5">
             <div className="flex items-center gap-2 mb-1">
               <Edit3 className="w-4 h-4 text-amber-600" />
@@ -330,33 +356,38 @@ const DayDetailModal: React.FC<{
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {detail.leave && (
-                <div>
-                  <label className="text-[10px] font-black text-amber-700/70 uppercase mb-2 block tracking-widest">Adjust Leave Type</label>
-                  <select 
-                    value={selectedType} 
-                    onChange={(e) => setSelectedType(e.target.value as any)}
-                    className="w-full bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-900 p-3 rounded-lg text-sm font-bold focus:border-indigo-500 outline-none transition-all"
-                  >
-                    <option value="FULL">Full Day Leave</option>
-                    <option value="HALF">Half Day Leave</option>
-                    <option value="EARLY">Early Leave</option>
-                    <option value="LATE">Late Arrival</option>
-                    <option value="WORK_FROM_HOME">Work From Home (WFH)</option>
-                  </select>
-                </div>
-              )}
-
-              <div className="flex flex-col h-full">
-                <label className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase mb-2 block tracking-widest">Manager Feedback</label>
-                <textarea 
-                  className="flex-1 w-full min-h-[100px] rounded-xl p-4 border-2 bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-800 focus:border-indigo-500 text-gray-900 dark:text-slate-200 transition-all outline-none text-sm italic" 
-                  placeholder="Reason for change or task feedback..."
-                  value={comment} 
-                  onChange={(e) => setComment(e.target.value)} 
-                />
+            {detail.leave && (
+              <div>
+                <label className="text-[10px] font-black text-amber-700/70 uppercase mb-2 block tracking-widest">
+                  Adjust Leave Type
+                </label>
+                <select 
+                  value={selectedType} 
+                  onChange={(e) => setSelectedType(e.target.value as any)}
+                  className="w-full bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-900 p-3 rounded-lg text-sm font-bold focus:border-indigo-500 outline-none transition-all"
+                >
+                  <option value="FULL">Full Day Leave</option>
+                  <option value="HALF">Half Day Leave</option>
+                  <option value="EARLY">Early Leave</option>
+                  <option value="LATE">Late Arrival</option>
+                  <option value="WORK_FROM_HOME">Work From Home (WFH)</option>
+                </select>
               </div>
+            )}
+
+            {/* Added conditional col-span-2 if detail.leave is falsy */}
+            <div className={`flex flex-col h-full ${!detail.leave ? 'md:col-span-2' : ''}`}>
+              <label className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase mb-2 block tracking-widest">
+                Manager Feedback
+              </label>
+              <textarea 
+                className="flex-1 w-full min-h-[100px] rounded-xl p-4 border-2 bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-800 focus:border-indigo-500 text-gray-900 dark:text-slate-200 transition-all outline-none text-sm italic" 
+                placeholder="Reason for change or task feedback..."
+                value={comment} 
+                onChange={(e) => setComment(e.target.value)} 
+              />
             </div>
+          </div>
 
             {detail.leave && detail.leave.days > 1 && (
                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-lg">
