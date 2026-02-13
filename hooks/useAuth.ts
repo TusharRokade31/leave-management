@@ -1,6 +1,15 @@
+"use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api/api";
 import { setAuthToken, getAuthToken, removeAuthToken } from "@/lib/api/api";
+
+// 1. Ensure User interface matches your database/API shape
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: 'MANAGER' | 'EMPLOYEE';
+}
 
 interface UseAuthReturn {
   currentUser: User | null;
@@ -39,7 +48,9 @@ export const useAuth = (): UseAuthReturn => {
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await api.login(email, password);
+      // Cast the response to the expected shape to remove the red line
+      const response = await api.login(email, password) as { token: string; user: User };
+      
       setAuthToken(response.token);
       setCurrentUser(response.user);
       return { success: true };
@@ -48,7 +59,7 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
-    const otpLogin = async (
+  const otpLogin = async (
     email: string,
     otp: string
   ): Promise<{ success: boolean; error?: string }> => {
@@ -59,12 +70,12 @@ export const useAuth = (): UseAuthReturn => {
         body: JSON.stringify({ email, otp }),
       });
 
-      const data = await response.json();
+      // Cast the data to the expected shape here too
+      const data = await response.json() as { token: string; user: User; error?: string };
 
       if (response.ok) {
         setCurrentUser(data.user);
         setAuthToken(data.token);
-
         return { success: true };
       }
 

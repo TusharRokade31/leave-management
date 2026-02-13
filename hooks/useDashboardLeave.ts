@@ -1,9 +1,30 @@
 // hooks/useDashboardLeave.ts
 import { useState, useEffect } from "react";
 import { Stats, LeaveFormData } from "@/type/form";
-
 import { api } from "@/lib/api/api";
 import { toast } from "react-toastify";
+
+// Define the User interface locally to match your updated auth model
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  endDate?: string | null;
+}
+
+// Define the Leave interface to ensure internal consistency
+interface Leave {
+  id: number;
+  userId: number;
+  startDate: string;
+  endDate: string;
+  status: string;
+  type: string;
+  days: number;
+  reason: string;
+  managerComment?: string | null;
+}
 
 interface UseLeavesReturn {
   leaves: Leave[];
@@ -30,19 +51,16 @@ export const useDashboardLeaves = (currentUser: User | null, currentDate: Date):
 
       let fetchedLeaves: Leave[];
       if (currentUser.role === 'MANAGER') {
-        // Pass month and year to API
         fetchedLeaves = await api.getAllDashboardLeaves(month, year);
       } else {
         fetchedLeaves = await api.getMyLeaves();
       }
       setLeaves(fetchedLeaves);
       
-      // Fetch stats for the specific month
       const fetchedStats = await api.getStats(month, year);
       setStats(fetchedStats);
     } catch (error) {
       console.error('Failed to fetch leaves:', error);
-      // alert('Failed to fetch leaves: ' + (error as Error).message); // Optional: Disable alert on common fetches
     } finally {
       setLoading(false);
     }
@@ -50,7 +68,7 @@ export const useDashboardLeaves = (currentUser: User | null, currentDate: Date):
 
   useEffect(() => {
     fetchLeaves();
-  }, [currentUser, currentDate]); // Re-fetch when date changes
+  }, [currentUser, currentDate]); 
 
   const createLeave = async (leaveData: LeaveFormData): Promise<void> => {
     try {

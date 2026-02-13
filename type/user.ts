@@ -4,4 +4,5 @@ interface User {
   email: string;
   role: 'EMPLOYEE' | 'MANAGER';
   password: string;
+  isActive: boolean;
 }
