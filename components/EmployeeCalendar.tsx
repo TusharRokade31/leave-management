@@ -1,10 +1,10 @@
 "use client";
-import React, { useState, forwardRef, useImperativeHandle } from "react";
+import React, { useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import ReactDOM from "react-dom";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { format, isSameDay, isBefore, startOfDay } from "date-fns";
-import { X, Calendar as CalendarIcon, Save, AlertTriangle, MessageSquare } from "lucide-react";
+import { X, Calendar as CalendarIcon, Save, AlertTriangle, MessageSquare, CheckCircle2, Building2, ListTodo, CheckSquare, Clock } from "lucide-react";
 import { getAuthToken } from "@/lib/api/api";
 import { canEditDate, isFutureDate } from "@/utils/date";
 import useSWR from "swr";
@@ -28,9 +28,17 @@ if (typeof window !== "undefined") {
   }
 }
 
+interface AssignedTask {
+  company: string;
+  task: string;
+  isDone: boolean;
+  assignedAt?: string; // ✅ Added assignedAt timestamp
+}
+
 interface TaskData {
   content: string;
   managerComment: string;
+  assignedTasks: AssignedTask[]; 
 }
 
 const fetcher = async (url: string) => {
@@ -43,7 +51,8 @@ const fetcher = async (url: string) => {
   data?.forEach((t: any) => {
     map[format(new Date(t.date), "yyyy-MM-dd")] = {
       content: t.content || "",
-      managerComment: t.managerComment || ""
+      managerComment: t.managerComment || "",
+      assignedTasks: Array.isArray(t.assignedTasks) ? t.assignedTasks : [] 
     };
   });
   return map;
@@ -54,8 +63,9 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
   const [showModal, setShowModal] = useState(false);
   const [currentPointers, setCurrentPointers] = useState("");
   const [currentComment, setCurrentComment] = useState("");
+  const [currentAssignedTasks, setCurrentAssignedTasks] = useState<AssignedTask[]>([]); 
   const [isSaving, setIsSaving] = useState(false);
-  const [isMissingTask, setIsMissingTask] = useState(false); // New state to track tile color sync
+  const [isMissingTask, setIsMissingTask] = useState(false); 
 
   const url = employeeId ? `/api/tasks?userId=${employeeId}` : "/api/tasks";
   const { data: tasks = {}, mutate } = useSWR(url, fetcher, {
@@ -69,12 +79,28 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
     }
   }));
 
+  // ✅ New formatting function for timestamp matching Manager view
+  const formatAssignedAt = (dateString?: string) => {
+    if (!dateString) return "";
+    try {
+      return new Date(dateString).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch (e) {
+      return dateString; // Fallback to raw string if parsing fails
+    }
+  };
+
   const handleDayClick = (date: Date) => {
     if (!viewOnly && isFutureDate(date)) return;
     const dateKey = format(date, "yyyy-MM-dd");
     const existingTask = tasks[dateKey];
     
-    // Check if the tile clicked was a "missing" (red) tile
     const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
     const missing = isPast && !existingTask?.content && !viewOnly;
     
@@ -82,11 +108,26 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
     setSelectedDate(date);
     setCurrentPointers(existingTask?.content || "");
     setCurrentComment(existingTask?.managerComment || "");
+    setCurrentAssignedTasks(existingTask?.assignedTasks || []); 
     setShowModal(true);
   };
 
-  const handleSave = async () => {
-    if (!viewOnly && !canEditDate(selectedDate)) return;
+  const handleToggleAssignedTask = async (index: number) => {
+    if (viewOnly || !isSameDay(selectedDate, new Date())) return; 
+    const updatedTasks = [...currentAssignedTasks];
+    updatedTasks[index].isDone = !updatedTasks[index].isDone;
+    setCurrentAssignedTasks(updatedTasks);
+    await performSave(updatedTasks); // Auto-sync
+  };
+
+  const handleMarkAllCompleted = async () => {
+    if (viewOnly || !isSameDay(selectedDate, new Date())) return;
+    const updatedTasks = currentAssignedTasks.map(t => ({ ...t, isDone: true }));
+    setCurrentAssignedTasks(updatedTasks);
+    await performSave(updatedTasks); // Auto-sync
+  };
+
+  const performSave = async (assignedToSave?: AssignedTask[]) => {
     setIsSaving(true);
     const token = getAuthToken();
     const dateToSave = format(selectedDate, "yyyy-MM-dd");
@@ -99,19 +140,25 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
           date: dateToSave,
           content: viewOnly ? undefined : currentPointers,
           managerComment: viewOnly ? currentComment : undefined,
+          assignedTasks: assignedToSave || currentAssignedTasks, 
           employeeId: employeeId
         }),
       });
 
       if (res.ok) {
         await mutate();
-        setShowModal(false);
       }
     } catch (error) {
-      console.error("Save failed:", error);
+      console.error("Sync failed:", error);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSave = async () => {
+    if (!viewOnly && !canEditDate(selectedDate)) return;
+    await performSave();
+    setShowModal(false);
   };
 
   const quillModules = {
@@ -122,51 +169,19 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
     ],
   };
 
+  const hasPendingTasks = currentAssignedTasks.some(t => !t.isDone);
+  const isSelectedToday = isSameDay(selectedDate, new Date());
+
   return (
     <div className="w-full max-w-md mx-auto bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-[2.5rem] p-6 transition-colors duration-300 shadow-sm">
       
       <style jsx global>{`
-        .dark .react-calendar {
-          background-color: transparent !important;
-          border: none !important;
-          color: #ffffff !important;
-        }
+        .dark .react-calendar { background-color: transparent !important; border: none !important; color: #ffffff !important; }
         .dark .react-calendar__tile { color: #ffffff !important; font-weight: 600; }
-        .dark .react-calendar__month-view__weekdays__weekday abbr { color: #94a3b8 !important; text-decoration: none; }
-        
-        .react-calendar__navigation button:enabled:hover,
-        .react-calendar__navigation button:enabled:focus {
-          background-color: transparent !important;
-        }
-
-        .dark .react-calendar__tile:enabled:hover {
-          background-color: #1e293b !important;
-          border-radius: 12px;
-        }
-        .dark .react-calendar__navigation button { color: #ffffff !important; background: none; }
-        
         .task-added { background-color: #2563eb !important; color: white !important; border-radius: 12px !important; }
         .task-missing { background-color: #ef4444 !important; color: white !important; border-radius: 12px !important; }
         .tile-today-focus { border: 2px solid #2563eb !important; border-radius: 12px !important; }
-
-        .dark .ql-toolbar { 
-          background: #1e293b; 
-          border-color: #334155 !important; 
-          border-top-left-radius: 12px; 
-          border-top-right-radius: 12px; 
-        }
-        .dark .ql-container { 
-          background: #0f172a; 
-          border-color: #334155 !important; 
-          border-bottom-left-radius: 12px; 
-          border-bottom-right-radius: 12px; 
-          color: #f8fafc !important; 
-        }
-        .dark .ql-stroke { stroke: #94a3b8 !important; }
-        .dark .ql-fill { fill: #94a3b8 !important; }
-        .dark .ql-picker { color: #94a3b8 !important; }
-        .ql-editor { min-height: 200px; font-size: 16px; }
-        .ql-editor.ql-blank::before { color: #64748b !important; }
+        .ql-editor { min-height: 180px; font-size: 16px; }
       `}</style>
 
       <div className="flex justify-center">
@@ -203,16 +218,12 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
           <div className="absolute inset-0 bg-slate-900/40 dark:bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           <div className="relative bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-transparent dark:border-slate-800">
             
-            {/* Dynamic Header Gradient: Red if missing, Blue otherwise */}
             <div className={`relative p-8 text-white transition-colors duration-500 ${
               isMissingTask 
                 ? "bg-gradient-to-br from-red-500 to-red-700 dark:from-red-900 dark:to-slate-900" 
                 : "bg-gradient-to-br from-blue-600 to-blue-800 dark:from-indigo-900 dark:to-slate-900"
             }`}>
-              <button 
-                onClick={() => setShowModal(false)} 
-                className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 dark:bg-slate-800/50 rounded-full transition-all z-50 cursor-pointer"
-              >
+              <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 dark:bg-slate-800/50 rounded-full transition-all z-50 cursor-pointer">
                 <X size={20} strokeWidth={3} />
               </button>
               <div className="flex items-center gap-3 mb-2 opacity-80">
@@ -225,6 +236,65 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
             </div>
             
             <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+              
+              {/* MANAGER ASSIGNED TASKS SECTION */}
+              <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl p-6 border border-indigo-100 dark:border-indigo-900/30">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <ListTodo className="w-4 h-4 text-indigo-600" />
+                    <label className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Assignments for Today</label>
+                  </div>
+                  
+                  {!viewOnly && isSelectedToday && hasPendingTasks && (
+                    <button 
+                      onClick={handleMarkAllCompleted}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[9px] font-black uppercase transition-all shadow-md active:scale-95"
+                    >
+                      <CheckSquare size={12} /> Mark All Done
+                    </button>
+                  )}
+                </div>
+
+                {currentAssignedTasks.length > 0 ? (
+                  <div className="space-y-3">
+                    {currentAssignedTasks.map((t, idx) => (
+                      <div key={idx} className="flex items-start gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all group">
+                        <input 
+                          type="checkbox" 
+                          checked={t.isDone} 
+                          onChange={() => handleToggleAssignedTask(idx)}
+                          disabled={viewOnly || !isSelectedToday}
+                          className="mt-1 h-5 w-5 rounded-md border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-black bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 uppercase">
+                              <Building2 size={10} /> {t.company}
+                            </span>
+                            {/* ✅ Show formatted assignedAt time next to task */}
+                            {t.assignedAt && (
+                              <span className="text-[8px] font-bold text-gray-400 dark:text-slate-500 flex items-center gap-1">
+                                <Clock size={10} /> {formatAssignedAt(t.assignedAt)}
+                              </span>
+                            )}
+                          </div>
+                          <div 
+                            className={`text-sm prose prose-sm dark:prose-invert max-w-none ${t.isDone ? 'line-through opacity-40' : 'opacity-100'}`}
+                            dangerouslySetInnerHTML={{ __html: t.task }}
+                          />
+                        </div>
+                        {t.isDone && <CheckCircle2 className="w-4 h-4 text-green-500 mt-1" />}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-4 text-indigo-300 dark:text-indigo-900/50">
+                    <CheckCircle2 size={24} className="mb-2 opacity-20" />
+                    <p className="text-[10px] font-bold uppercase tracking-tighter">No manager assignments</p>
+                  </div>
+                )}
+              </div>
+
               {!viewOnly && !canEditDate(selectedDate) && (
                 <div className="flex items-center gap-3 text-[10px] font-bold uppercase text-blue-800 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 p-4 rounded-2xl">
                   <AlertTriangle size={16} /> 
@@ -233,7 +303,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
               )}
 
               <div className="space-y-3">
-                <label className={`text-[10px] font-black uppercase tracking-widest ${isMissingTask ? 'text-red-500' : 'text-blue-500 dark:text-indigo-400'}`}>Task Log</label>
+                <label className={`text-[10px] font-black uppercase tracking-widest ${isMissingTask ? 'text-red-500' : 'text-blue-500 dark:text-indigo-400'}`}>My Task Log</label>
                 <div className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-200 dark:border-slate-700 shadow-sm">
                   <ReactQuill 
                     theme="snow"

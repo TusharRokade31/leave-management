@@ -39,9 +39,11 @@ export default function Home() {
     employees, 
     loading: workStatusLoading, 
     updateTaskFeedback,
+    addAssignedTasks, // ✅ Extracting the task assignment function from hook
     addUser,
-    updateUser, 
-    // REMOVED: deleteUser logic has been stripped out
+    updateUser,
+    companies,        // Hook Fix: Fetching persistent DB companies
+    saveNewCompany,   // Hook Fix: Function to save persistent DB companies
     refreshData 
   } = useEmployeeWorkStatus(currentUser, currentMonth);
 
@@ -311,9 +313,12 @@ export default function Home() {
                 ) : (
                   <EmployeeWorkStatusTable
                     employees={visibleEmployees as any}
+                    companies={companies}             // Persistence Fix: Passing DB companies
+                    onSaveNewCompany={saveNewCompany} // Persistence Fix: Function to save company
                     currentMonth={currentMonth}
                     onMonthChange={setCurrentMonth}
                     onUpdateFeedback={updateTaskFeedback}
+                    onAssignTasks={addAssignedTasks}    // ✅ Added mapping to fix TypeScript red line
                     onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
                   />
                 )}
@@ -408,7 +413,6 @@ export default function Home() {
           employees={employees as any}
           onAdd={addUser}
           onUpdate={updateUser}
-          // REMOVED: Prop 'onDelete' is gone
           onClose={() => setShowUserManagement(false)} 
         />
       )}

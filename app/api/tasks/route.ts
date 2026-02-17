@@ -1,39 +1,102 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
+import { Prisma } from '@prisma/client';
 
 export async function POST(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
-    // Destructure managerComment and employeeId from the request body
-    const { date, content, managerComment, employeeId } = await req.json();
+    const body = await req.json();
 
-    // Normalize date to midnight to match the @@unique constraint 
+    const {
+      date,
+      content,
+      managerComment,
+      employeeId,
+      assignedTasks,
+    } = body;
+
+    // ✅ Normalize date to UTC midnight
     const normalizedDate = new Date(date);
-    // normalizedDate.setHours(0, 0, 0, 0);
+    normalizedDate.setUTCHours(0, 0, 0, 0);
 
-    /* DETERMINE TARGET USER:
-       If a MANAGER is sending an employeeId, we update that employee's task.
-       Otherwise, we update the task for the currently authenticated user.
-    */
-    const isManagerAction = authUser.role === 'MANAGER' && employeeId;
-    const targetUserId = isManagerAction ? parseInt(employeeId) : authUser.id;
+    // ✅ Determine target user
+    const isManager = authUser.role === 'MANAGER';
+    const isManagerAction = isManager && employeeId;
+    const targetUserId = isManagerAction
+      ? parseInt(employeeId)
+      : authUser.id;
 
-    // Build the update object dynamically based on permissions
+    // Fetch existing record (important for merging)
+    const existingTask = await prisma.task.findUnique({
+      where: {
+        userId_date: {
+          userId: targetUserId,
+          date: normalizedDate,
+        },
+      },
+    });
+
     const updateData: any = {};
-    
+    const incomingTasks =
+      assignedTasks as Prisma.InputJsonValue | undefined;
+
+    // =========================
+    // 🧑‍💼 MANAGER FLOW
+    // =========================
     if (isManagerAction) {
-      // Managers can only update the managerComment field
       if (managerComment !== undefined) {
         updateData.managerComment = managerComment;
       }
-    } else {
-      // Employees can only update their own task content
+
+      // Manager can fully override assignments
+      if (incomingTasks !== undefined) {
+        updateData.assignedTasks = incomingTasks;
+      }
+
       if (content !== undefined) {
         updateData.content = content;
       }
     }
 
+    // =========================
+    // 👨‍💻 EMPLOYEE FLOW
+    // =========================
+    else {
+      if (content !== undefined) {
+        updateData.content = content;
+      }
+
+      // Employee can only toggle isDone
+      if (
+        incomingTasks !== undefined &&
+        existingTask?.assignedTasks
+      ) {
+        const currentTasks: any[] =
+          existingTask.assignedTasks as any[];
+
+        const mergedTasks = currentTasks.map((task) => {
+          const updated = (incomingTasks as any[]).find(
+            (t) => t.id === task.id
+          );
+
+          if (updated) {
+            return {
+              ...task,
+              isDone: updated.isDone,
+            };
+          }
+
+          return task;
+        });
+
+        updateData.assignedTasks = mergedTasks;
+      }
+    }
+
+    // =========================
+    // UPSERT
+    // =========================
     const task = await prisma.task.upsert({
       where: {
         userId_date: {
@@ -45,20 +108,27 @@ export async function POST(req: NextRequest) {
       create: {
         userId: targetUserId,
         date: normalizedDate,
-        content: content || "",
+        content: content || '',
         managerComment: managerComment || null,
-        // Ensure default status is set [cite: 6]
-        status: 'PRESENT', 
+        assignedTasks: incomingTasks || [],
+        status: 'PRESENT',
         isCompleted: true,
       },
     });
 
     return NextResponse.json(task);
   } catch (err: any) {
-    console.error("Task Save Error:", err); 
-    return NextResponse.json({ error: 'Failed to save task' }, { status: 500 });
+    console.error('Task Save Error:', err);
+    return NextResponse.json(
+      { error: 'Failed to save task' },
+      { status: 500 }
+    );
   }
 }
+
+// ======================================
+// GET TASKS
+// ======================================
 
 export async function GET(req: NextRequest) {
   try {
@@ -66,17 +136,31 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
 
-    // Managers can view any employee's tasks via query param; employees only see their own
-    const targetId = authUser.role === 'MANAGER' && userId ? parseInt(userId) : authUser.id;
+    const targetUserId =
+      authUser.role === 'MANAGER' && userId
+        ? parseInt(userId)
+        : authUser.id;
 
     const tasks = await prisma.task.findMany({
-      where: { userId: targetId },
-      orderBy: { date: 'desc' }, // [cite: 6]
+      where: { userId: targetUserId },
+      select: {
+        id: true,
+        date: true,
+        content: true,
+        status: true,
+        isCompleted: true,
+        managerComment: true,
+        assignedTasks: true,
+      },
+      orderBy: { date: 'desc' },
     });
 
     return NextResponse.json(tasks);
   } catch (err: any) {
-    console.error("Task Fetch Error:", err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    console.error('Task Fetch Error:', err);
+    return NextResponse.json(
+      { error: 'Server error' },
+      { status: 500 }
+    );
   }
 }
