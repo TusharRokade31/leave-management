@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Role is automatically pulled from the DB record based on your schema
     const token = generateToken(user.id, user.role);
 
     return NextResponse.json({
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
         name: user.name,
         email: user.email,
         role: user.role,
+        endDate: user.endDate, // Fetched for session; visibility is handled in UI
       },
       token,
     });

@@ -3,12 +3,13 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api/api";
 import { setAuthToken, getAuthToken, removeAuthToken } from "@/lib/api/api";
 
-// 1. Ensure User interface matches your database/API shape
+// 1. Updated interface to match Prisma schema exactly
 interface User {
   id: number;
   name: string;
   email: string;
   role: 'MANAGER' | 'EMPLOYEE';
+  endDate?: string | null; // Added to match schema for offboarding logic
 }
 
 interface UseAuthReturn {

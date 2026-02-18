@@ -44,17 +44,18 @@ enum AttendanceStatus {
 ======================= */
 
 model User {
-  id        Int       @id @default(autoincrement())
-  name      String
-  email     String    @unique
-  password  String
-  role      Role      @default(EMPLOYEE)
-  endDate   DateTime? // Strictly used for the offboarding date
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id            Int            @id @default(autoincrement())
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(EMPLOYEE)
+  endDate       DateTime?      // Strictly used for the offboarding date
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   
-  leaves    Leave[]
-  tasks     Task[]
+  leaves        Leave[]
+  tasks         Task[]
+  assignedTasks AssignedTask[] // Relation to manager-assigned work
 
   @@index([email])
 }
@@ -82,9 +83,9 @@ model Leave {
   editSummary      String?     @db.Text
   
   // For the Split functionality
-  isSplit          Boolean     @default(false)    // True if this was carved out of a multi-day leave
-  originalLeaveId  Int?                           // The ID of the parent leave before it was split
-  isManagerUpdated Boolean     @default(false)    // True if a manager overrode this specific day
+  isSplit          Boolean     @default(false)    
+  originalLeaveId  Int?                           
+  isManagerUpdated Boolean     @default(false)    
   // -----------------------------------------------
 
   user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -98,12 +99,8 @@ model Task {
   id              Int              @id @default(autoincrement())
   userId          Int
   date            DateTime
-  content         String           @db.Text
+  content         String           @db.Text // The employee's own work log
   managerComment  String?          @db.Text
-  
-  // Manager assigned tasks with company names and checkboxes
-  // Stored as an array of objects: [{ "company": string, "task": string, "isDone": boolean }]
-  assignedTasks   Json?            @default("[]") 
   
   status          AttendanceStatus @default(PRESENT)
   isCompleted     Boolean          @default(true)
@@ -114,6 +111,25 @@ model Task {
 
   @@unique([userId, date])
   @@index([date])
+}
+
+// NEW: Separate model for Manager-Assigned Tasks (Asana Style)
+model AssignedTask {
+  id          Int      @id @default(autoincrement())
+  userId      Int      // The employee assigned to the task
+  companyId   Int?     
+  companyName String?  // Flexible: can use relation or string
+  taskTitle   String   @db.Text
+  isDone      Boolean  @default(false)
+  dueDate     DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isDone])
 }
 
 model Company {
