@@ -15,6 +15,7 @@ import 'react-quill/dist/quill.snow.css';
     Interfaces
 ───────────────────────────────────────────────────────── */
 interface AssignedTask {
+  userId: number; 
   id?: number;   
   company: string;
   task: string;
@@ -308,6 +309,7 @@ const DayDetailModal: React.FC<{
       task: t.task || t.taskTitle || "",
       isDone: Boolean(t.isDone),
       assignedAt: t.assignedAt || t.createdAt || null,
+      userId: t.userId ?? 0,
     }));
 
   const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>(mapTasks(detail.task?.assignedTasks));
@@ -357,6 +359,7 @@ const DayDetailModal: React.FC<{
       task: newTaskContent,
       isDone: false,
       assignedAt: new Date().toISOString(), 
+      userId: detail.employee.user.id,
     };
 
     const updatedTasks = [...assignedTasks, newTask];

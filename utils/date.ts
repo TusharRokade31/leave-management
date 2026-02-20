@@ -37,3 +37,19 @@ export const isFutureDate = (date: Date): boolean => {
 
   return target > today;
 };
+
+
+// export const canEditDate = (date: Date): boolean => {
+//   const today = new Date();
+//   today.setHours(0, 0, 0, 0);
+
+//   // Calculate the cutoff (2 days before today)
+//   const twoDaysAgo = new Date(today);
+//   twoDaysAgo.setDate(today.getDate() - 2);
+
+//   const target = new Date(date);
+//   target.setHours(0, 0, 0, 0);
+
+//   // Check if target is between twoDaysAgo (inclusive) and today (inclusive)
+//   return target >= twoDaysAgo && target <= today;
+// };
