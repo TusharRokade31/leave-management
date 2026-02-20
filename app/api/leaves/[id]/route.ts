@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
-import { sendLeaveNotification } from '@/lib/email'; // Ensure this is imported
+import { sendLeaveNotification } from '@/lib/email'; 
 
 export async function PATCH(
   req: NextRequest,
@@ -70,7 +70,7 @@ export async function PATCH(
         // TRIGGER NOTIFICATION: Manager Decision (Approved/Rejected)
         try {
           await sendLeaveNotification({
-            mode: status.toUpperCase(), // 'APPROVED' or 'REJECTED'
+            mode: status.toUpperCase(), 
             leave: updatedLeave,
             employeeName: updatedLeave.user.name,
             employeeEmail: updatedLeave.user.email
@@ -95,6 +95,7 @@ export async function PATCH(
         }, { status: 403 });
       }
 
+      // Updated to match potential schema fields like startTime/endTime
       const updatedLeave = await prisma.leave.update({
         where: { id: parseInt(id) },
         data: {

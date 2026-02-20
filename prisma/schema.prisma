@@ -44,51 +44,51 @@ enum AttendanceStatus {
 ======================= */
 
 model User {
-  id        Int       @id @default(autoincrement())
-  name      String
-  email     String    @unique
-  password  String
-  role      Role      @default(EMPLOYEE)
-  endDate   DateTime? // Strictly used for the offboarding date
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id            Int            @id @default(autoincrement())
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(EMPLOYEE)
+  endDate       DateTime?      // Strictly used for the offboarding date
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   
-  leaves    Leave[]
-  tasks     Task[]
+  leaves        Leave[]
+  tasks         Task[]
+  assignedTasks AssignedTask[] // Relation to manager-assigned work
 
   @@index([email])
-  // REMOVED: isActive index as the field no longer exists
 }
 
 model Leave {
-  id              Int         @id @default(autoincrement())
-  userId          Int
-  startDate       DateTime
-  endDate         DateTime
-  startTime       String?
-  endTime         String?
-  reason          String      @db.Text
-  type            LeaveType   @default(FULL)
-  days            Int
-  status          LeaveStatus @default(PENDING)
-  managerComment  String?     @db.Text
+  id               Int         @id @default(autoincrement())
+  userId           Int
+  startDate        DateTime
+  endDate          DateTime
+  startTime        String?
+  endTime          String?
+  reason           String      @db.Text
+  type             LeaveType   @default(FULL)
+  days             Int
+  status           LeaveStatus @default(PENDING)
+  managerComment   String?     @db.Text
   
-  lastCommentedAt DateTime?   // Tracks when the manager last sent feedback
+  lastCommentedAt  DateTime?   // Tracks when the manager last sent feedback
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   // --- Tracking Fields ---
-  isEdited        Boolean     @default(false)
-  editSummary     String?     @db.Text
+  isEdited         Boolean     @default(false)
+  editSummary      String?     @db.Text
   
-  // ADDED: For the Split functionality
-  isSplit         Boolean     @default(false)    // True if this was carved out of a multi-day leave
-  originalLeaveId Int?                           // The ID of the parent leave before it was split
-  isManagerUpdated Boolean    @default(false)    // True if a manager overrode this specific day
+  // For the Split functionality
+  isSplit          Boolean     @default(false)    
+  originalLeaveId  Int?                           
+  isManagerUpdated Boolean     @default(false)    
   // -----------------------------------------------
 
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
@@ -99,17 +99,43 @@ model Task {
   id              Int              @id @default(autoincrement())
   userId          Int
   date            DateTime
-  content         String           @db.Text
+  content         String           @db.Text // The employee's own work log
   managerComment  String?          @db.Text
+  
   status          AttendanceStatus @default(PRESENT)
   isCompleted     Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@index([date])
+}
+
+// NEW: Separate model for Manager-Assigned Tasks (Asana Style)
+model AssignedTask {
+  id          Int      @id @default(autoincrement())
+  userId      Int      // The employee assigned to the task
+  companyId   Int?     
+  companyName String?  // Flexible: can use relation or string
+  taskTitle   String   @db.Text
+  isDone      Boolean  @default(false)
+  dueDate     DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isDone])
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
 }
 
 model OTP {

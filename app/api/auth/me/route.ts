@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
         name: true,
         email: true,
         role: true,
+        endDate: true, // Necessary change: Fetching the offboarding date for the session
       },
     });
 
