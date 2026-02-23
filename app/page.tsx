@@ -346,13 +346,13 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="bg-indigo-600 text-white p-6 lg:p-8 rounded-[2rem] lg:rounded-[2.5rem] shadow-xl relative overflow-hidden flex flex-col justify-center min-h-[160px]">
+                  {/* <div className="bg-indigo-600 text-white p-6 lg:p-8 rounded-[2rem] lg:rounded-[2.5rem] shadow-xl relative overflow-hidden flex flex-col justify-center min-h-[160px]">
                     <div className="relative z-10">
                       <h3 className="text-lg lg:text-xl font-bold mb-2 uppercase tracking-tighter italic">AlphaBeta Compliance</h3>
                       <p className="text-indigo-100 text-xs lg:text-sm leading-relaxed opacity-90 font-medium">Remember to log work entries within 2 days of completion to ensure accurate payroll processing.</p>
                     </div>
                     <Briefcase className="absolute -bottom-4 -right-4 w-24 lg:w-32 h-24 lg:h-32 text-white/10 rotate-12" />
-                  </div>
+                  </div> */}
                 </div>
               </div>
             )}

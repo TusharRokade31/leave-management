@@ -149,12 +149,20 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
     const submitted = hasContent(task);
     if (leave) {
       const border = leave.status === 'PENDING' ? 'ring-2 ring-amber-400 ring-inset' : '';
-      switch (leave.type) {
-        case 'FULL': return { symbol: 'FL', color: `bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 ${border}` };
-        case 'WORK_FROM_HOME':
-          return { symbol: submitted ? 'WFH ✓' : 'WFH', color: `bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 ${border}` };
-        default: return { symbol: 'L', color: `bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 ${border}` };
-      }
+     switch (leave.type) {
+  case 'FULL': 
+    return { symbol: 'FL', color: `bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300 ${border}` };
+  case 'WORK_FROM_HOME': 
+    return { symbol: submitted ? 'WFH ✓' : 'WFH', color: `bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 ${border}` };
+  case 'EARLY': 
+    return { symbol: submitted ? 'EL ✓' : 'EL', color: `bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 ${border}` };
+  case 'HALF': 
+    return { symbol: submitted ? 'HL ✓' : 'HL', color: `bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 ${border}` };
+  case 'LATE': 
+    return { symbol: submitted ? 'LT ✓' : 'LT', color: `bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-300 ${border}` };
+  default: 
+    return { symbol: 'L', color: `bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 ${border}` };
+}
     }
     if (task) {
       if (task.status === 'WFH') return { 
@@ -253,11 +261,14 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
 
         <div className="p-4 sm:p-6 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 flex-shrink-0">
           <div className="flex flex-wrap gap-3 sm:gap-6 justify-center">
-            <LegendItem color="bg-green-100 text-green-600" label="Task Done" symbol="T✓" />
-            <LegendItem color="bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-300" label="WFH" symbol="WFH" />
-            <LegendItem color="bg-orange-100 text-orange-600" label="On Leave" symbol="FL" />
-            <LegendItem color="bg-red-100 text-red-600" label="Absent" symbol="A" />
-            <LegendItem color="bg-red-50 text-red-400" label="Weekend" symbol="W" />
+             <LegendItem color="bg-green-100 text-green-600"                              label="Task Done"  symbol="T✓"  />
+    <LegendItem color="bg-sky-100 dark:bg-sky-900/40 text-sky-600"               label="WFH"        symbol="WFH" />
+    <LegendItem color="bg-red-100 dark:bg-red-900/40 text-red-600"               label="Full Leave" symbol="FL"  />
+    <LegendItem color="bg-amber-100 dark:bg-amber-900/40 text-amber-600"         label="Half Leave" symbol="HL"  />
+    <LegendItem color="bg-violet-100 dark:bg-violet-900/40 text-violet-600"      label="Early Out"  symbol="EL"  />
+    <LegendItem color="bg-pink-100 dark:bg-pink-900/40 text-pink-600"            label="Late In"    symbol="LT"  />
+    <LegendItem color="bg-red-100 dark:bg-red-900/40 text-red-400"               label="Absent"     symbol="A"   />
+    <LegendItem color="bg-red-50 text-red-400"                                   label="Weekend"    symbol="W"   />
           </div>
         </div>
       </div>
