@@ -181,17 +181,73 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
     <div className="w-full max-w-md mx-auto bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] sm:rounded-[2.5rem] p-4 sm:p-6 transition-colors duration-300 shadow-sm">
       
       <style jsx global>{`
-        .dark .react-calendar { background-color: transparent !important; border: none !important; color: #ffffff !important; }
-        .dark .react-calendar__tile { color: #ffffff !important; font-weight: 600; }
-        .task-added { background-color: #2563eb !important; color: white !important; border-radius: 12px !important; }
-        .task-missing { background-color: #ef4444 !important; color: white !important; border-radius: 12px !important; }
-        .tile-today-focus { border: 2px solid #2563eb !important; border-radius: 12px !important; }
-        .ql-editor { min-height: 180px; font-size: 16px; border: none !important; }
+        /* Core Calendar Theme Sync */
+        .react-calendar { background: transparent; border: none; font-family: inherit; width: 100% !important; }
+        .react-calendar__navigation button { color: #1e293b; font-weight: 800; border-radius: 12px; }
+        .react-calendar__navigation button:enabled:hover, .react-calendar__navigation button:enabled:focus { background-color: #f1f5f9; }
+        .dark .react-calendar__navigation button { color: #f8fafc !important; }
+        .dark .react-calendar__navigation button:enabled:hover { background-color: #1e293b !important; }
+
+        /* Weekday Labels */
+        .react-calendar__month-view__weekdays__weekday { text-decoration: none; font-weight: 700; color: #64748b; font-size: 0.75rem; }
+        .dark .react-calendar__month-view__weekdays__weekday { color: #94a3b8; }
+
+        /* Tiles Styling */
+        .react-calendar__tile {
+          aspect-ratio: 1 / 1 !important;
+          border-radius: 12px !important;
+          margin: 4px 0;
+          font-weight: 700;
+          color: #1e293b;
+          transition: all 0.2s ease;
+          display: flex !important;
+          align-items: center;
+          justify-content: center;
+        }
+        .dark .react-calendar__tile { color: #f8fafc; }
+
+        /* Future Dates (Disabled Tiles) Fix */
+        .react-calendar__tile:disabled {
+          background-color: #f8fafc !important;
+          color: #cbd5e1 !important;
+          cursor: not-allowed;
+        }
+        .dark .react-calendar__tile:disabled {
+          background-color: transparent !important;
+          color: #475569 !important;
+        }
+
+        /* Hover Behavior Fixes */
+        .react-calendar__tile:enabled:hover, .react-calendar__tile:enabled:focus {
+          background-color: #f1f5f9 !important;
+          color: #2563eb !important;
+        }
+        .dark .react-calendar__tile:enabled:hover, .dark .react-calendar__tile:enabled:focus {
+          background-color: #1e293b !important;
+          color: #60a5fa !important;
+        }
+
+        /* Status Classes */
+        .task-added { background-color: #2563eb !important; color: white !important; }
+        .task-added:enabled:hover { background-color: #1d4ed8 !important; color: white !important; }
+        
+        .task-missing { background-color: #ef4444 !important; color: white !important; }
+        .task-missing:enabled:hover { background-color: #dc2626 !important; color: white !important; }
+        
+        .tile-today-focus { border: 2px solid #2563eb !important; background: transparent; }
+        .dark .tile-today-focus { border: 2px solid #3b82f6 !important; }
+
+        /* Quill Styles */
+        .ql-editor { min-height: 180px; font-size: 16px; border: none !important; color: #1e293b; }
+        .dark .ql-editor { color: #f1f5f9 !important; }
+        .dark .ql-editor.ql-blank::before { color: #94a3b8 !important; }
+        
         @media (min-width: 1024px) { .ql-editor { min-height: 250px; } }
         .ql-container.ql-snow { border: none !important; }
         .ql-toolbar.ql-snow { border: none !important; border-bottom: 1px solid #f1f5f9 !important; background: #fafafa; }
-        .dark .ql-toolbar.ql-snow { background: #1e293b; border-bottom: 1px solid #334155 !important; }
-        .react-calendar { width: 100% !important; max-width: 100%; background: white; border: none; font-family: inherit; }
+        .dark .ql-toolbar.ql-snow { background: #1e293b; border-bottom: 1px solid #334155 !important; color: white; }
+        .dark .ql-snow .ql-stroke { stroke: #f8fafc; }
+        .dark .ql-snow .ql-fill { fill: #f8fafc; }
       `}</style>
 
       <div className="flex justify-center overflow-hidden">
@@ -207,7 +263,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
             const hasTask = tasks[key]?.content && tasks[key].content !== '<p><br></p>';
             const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
             
-            let classes = "custom-tile transition-all duration-200 ";
+            let classes = "";
             if (isSameDay(date, new Date())) classes += "tile-today-focus ";
             if (hasTask) classes += "task-added ";
             else if (isPast && !viewOnly) classes += "task-missing ";
@@ -249,7 +305,6 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
             </div>
             
             <div className="p-4 sm:p-8 overflow-y-auto flex-1 scrollbar-hide">
-              {/* Responsive Grid: 1 column on small, 3 on large */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 h-full">
                 
                 {/* Column 1: Assigned Tasks */}
@@ -299,15 +354,18 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
 
                 {/* Column 2: Employee Submission */}
                 <div className="bg-gray-50 dark:bg-slate-800/30 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-gray-100 dark:border-slate-800 flex flex-col max-h-[400px] lg:max-h-[600px]">
-                  <h3 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex-shrink-0">My Submission</h3>
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex-1 flex flex-col min-h-0">
-                    <ReactQuill 
+                  <h3 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex-shrink-0">
+                    My Submission
+                  </h3>
+                  <div className="flex flex-col flex-1 min-h-0 [&_.quill]:flex-1 [&_.quill]:flex [&_.quill]:flex-col [&_.quill]:min-h-0 [&_.ql-container]:flex-1 [&_.ql-container]:flex [&_.ql-container]:flex-col [&_.ql-container]:min-h-0 [&_.ql-editor]:flex-1 [&_.ql-editor]:overflow-y-auto [&_.ql-editor]:max-h-full">
+                    <ReactQuill
                       theme="snow"
                       value={currentPointers}
                       onChange={setCurrentPointers}
                       modules={quillModules}
                       readOnly={viewOnly || !canEditDate(selectedDate)}
                       placeholder="Describe what you worked on today..."
+                      className="flex flex-col flex-1 min-h-0"
                     />
                   </div>
                 </div>
@@ -333,7 +391,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                         <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest">Feedback</label>
                       </div>
                       <div className={`w-full p-3 sm:p-5 rounded-2xl border-2 font-medium text-xs sm:text-sm transition-all ${
-                        viewOnly ? "bg-orange-50 dark:bg-orange-950/20 border-orange-100" : "bg-white dark:bg-slate-800 border-transparent text-gray-500 italic shadow-sm"
+                        viewOnly ? "bg-orange-50 dark:bg-orange-950/20 border-orange-100 text-orange-900 dark:text-orange-100" : "bg-white dark:bg-slate-800 border-transparent text-gray-500 italic shadow-sm"
                       }`}>
                         {currentComment || "No notes yet..."}
                       </div>
