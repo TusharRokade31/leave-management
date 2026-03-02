@@ -263,3 +263,39 @@
   opacity: 0.15 !important;
   pointer-events: none;
 }
+
+/* Make quill full flex column */
+  .ql-container {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 !important;
+    min-height: 0 !important;
+    border: none !important;
+  }
+
+  /* Toolbar always visible */
+  .ql-toolbar {
+    flex-shrink: 0 !important;
+    border: none !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    background: #fafafa;
+  }
+
+  .dark .ql-toolbar {
+    background: #1e293b !important;
+    border-bottom: 1px solid #334155 !important;
+  }
+
+  /* THIS enables scrolling */
+  .ql-editor {
+    flex: 1 1 auto;
+    overflow-y: auto !important;
+    min-height: 0 !important;
+    padding: 16px !important;
+    box-sizing: border-box;
+  }
+
+  /* Remove quill default border */
+  .ql-container.ql-snow {
+    border: none !important;
+  }
