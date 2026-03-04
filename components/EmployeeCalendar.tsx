@@ -176,6 +176,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
 
   const hasPendingTasks = currentAssignedTasks.some(t => !t.isDone);
   const isSelectedToday = isSameDay(selectedDate, new Date());
+  const hasAssignedTasks = currentAssignedTasks.length > 0; // 👈 key flag
 
   return (
     <div className="w-full max-w-md mx-auto bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] sm:rounded-[2.5rem] p-4 sm:p-6 transition-colors duration-300 shadow-sm">
@@ -305,54 +306,60 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
             </div>
             
             <div className="p-4 sm:p-8 overflow-y-auto flex-1 scrollbar-hide">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 h-full">
+              {/* 
+                LAYOUT LOGIC:
+                - Has assigned tasks  → 3 columns: Queue | Submission | Status
+                - No assigned tasks   → 2 columns: Submission (wider) | Status
+              */}
+              <div className={`grid gap-6 sm:gap-8 h-full ${
+                hasAssignedTasks 
+                  ? "grid-cols-1 lg:grid-cols-3" 
+                  : "grid-cols-1 lg:grid-cols-[1fr_380px]"
+              }`}>
                 
-                {/* Column 1: Assigned Tasks */}
-                <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 max-h-[400px] lg:max-h-[600px]">
-                  <div className="flex items-center justify-between flex-shrink-0">
-                    <div className="flex items-center gap-3">
-                      <ListTodo className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
-                      <h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Queue</h3>
+                {/* Column 1: Assigned Tasks — only rendered when tasks exist */}
+                {hasAssignedTasks && (
+                  <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 max-h-[400px] lg:max-h-[600px]">
+                    <div className="flex items-center justify-between flex-shrink-0">
+                      <div className="flex items-center gap-3">
+                        <ListTodo className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
+                        <h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Queue</h3>
+                      </div>
+                      {!viewOnly && isSelectedToday && hasPendingTasks && (
+                        <button onClick={handleMarkAllCompleted} className="text-[9px] sm:text-[10px] font-black text-indigo-600 uppercase border-b-2 border-indigo-200">
+                          Mark Done
+                        </button>
+                      )}
                     </div>
-                    {!viewOnly && isSelectedToday && hasPendingTasks && (
-                      <button onClick={handleMarkAllCompleted} className="text-[9px] sm:text-[10px] font-black text-indigo-600 uppercase border-b-2 border-indigo-200">
-                        Mark Done
-                      </button>
-                    )}
-                  </div>
 
-                  <div className="flex-1 overflow-y-auto pr-1 space-y-3 scrollbar-thin scrollbar-thumb-indigo-200">
-                    {currentAssignedTasks.length > 0 ? currentAssignedTasks.map((t, idx) => (
-                      <div key={t.id ?? idx} className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-indigo-50 shadow-sm group">
-                        <div className="flex items-start gap-3">
-                          <input 
-                            type="checkbox" 
-                            checked={t.isDone} 
-                            onChange={() => handleToggleAssignedTask(idx)}
-                            disabled={viewOnly || !isSelectedToday}
-                            className="mt-1 h-4 w-4 rounded border-indigo-200 text-indigo-600 cursor-pointer" 
-                          />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[7px] sm:text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase truncate block w-fit">{t.company}</span>
-                            <div className={`text-[10px] sm:text-[11px] mt-1 font-medium break-words ${t.isDone ? 'line-through text-gray-400' : 'text-gray-700 dark:text-slate-300'}`} dangerouslySetInnerHTML={{ __html: t.task }} />
-                            {t.assignedAt && (
-                               <div className="flex items-center gap-1 mt-2 text-[7px] sm:text-[8px] font-bold text-gray-400">
-                                 <Clock size={10} /> {formatAssignedAt(t.assignedAt)}
-                               </div>
-                            )}
+                    <div className="flex-1 overflow-y-auto pr-1 space-y-3 scrollbar-thin scrollbar-thumb-indigo-200">
+                      {currentAssignedTasks.map((t, idx) => (
+                        <div key={t.id ?? idx} className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-indigo-50 shadow-sm group">
+                          <div className="flex items-start gap-3">
+                            <input 
+                              type="checkbox" 
+                              checked={t.isDone} 
+                              onChange={() => handleToggleAssignedTask(idx)}
+                              disabled={viewOnly || !isSelectedToday}
+                              className="mt-1 h-4 w-4 rounded border-indigo-200 text-indigo-600 cursor-pointer" 
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[7px] sm:text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase truncate block w-fit">{t.company}</span>
+                              <div className={`text-[10px] sm:text-[11px] mt-1 font-medium break-words ${t.isDone ? 'line-through text-gray-400' : 'text-gray-700 dark:text-slate-300'}`} dangerouslySetInnerHTML={{ __html: t.task }} />
+                              {t.assignedAt && (
+                                 <div className="flex items-center gap-1 mt-2 text-[7px] sm:text-[8px] font-bold text-gray-400">
+                                   <Clock size={10} /> {formatAssignedAt(t.assignedAt)}
+                                 </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )) : (
-                      <div className="h-full flex flex-col items-center justify-center text-gray-300 py-6 sm:py-10">
-                        <CheckCircle2 size={32} strokeWidth={1} />
-                        <p className="text-[9px] sm:text-[10px] font-black uppercase mt-2 text-center">No tasks</p>
-                      </div>
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Column 2: Employee Submission */}
+                {/* Column 2: Employee Submission — expands to col-span-2 when no tasks */}
                 <div className="bg-gray-50 dark:bg-slate-800/30 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-gray-100 dark:border-slate-800 flex flex-col max-h-[400px] lg:max-h-[600px]">
                   <h3 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex-shrink-0">
                     My Submission
