@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Calendar, CheckCircle2, XCircle, Clock, Edit3, Save, RefreshCcw, Building2, ListTodo, Plus, Trash2, ChevronLeft, ChevronRight, Search, User } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Calendar, Clock, Edit3, ListTodo, Trash2, ChevronLeft, ChevronRight, Search, FileText, Send, MessageSquare, RefreshCcw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import dynamic from 'next/dynamic';
 
@@ -118,7 +118,6 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  // Filter Logic for Mobile Search
   const filteredEmployees = useMemo(() => {
     return employees?.filter(emp => 
       emp.user.name.toLowerCase().includes(mobileSearch.toLowerCase()) ||
@@ -188,25 +187,45 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
     });
   };
 
+  /* ─────────────────────────────────────────────────────────
+      UPDATED useEffect Block (Restored)
+  ───────────────────────────────────────────────────────── */
   useEffect(() => {
     if (!selectedDayDetail) return;
-    const updatedEmployee = employees.find((e) => e.user.id === selectedDayDetail.employee.user.id);
+
+    const updatedEmployee = employees.find(
+      (e) => e.user.id === selectedDayDetail.employee.user.id
+    );
+
     if (!updatedEmployee) return;
-    const { task, leave } = getDayStatus(updatedEmployee, selectedDayDetail.day);
-    setSelectedDayDetail((prev) => prev ? ({
-        ...prev,
-        employee: updatedEmployee,
-        task,
-        leave,
-        status: buildStatus(task, leave, isWeekendDay(selectedDayDetail.day)),
-    }) : null);
-  }, [employees]);
+
+    const { task, leave } = getDayStatus(
+      updatedEmployee,
+      selectedDayDetail.day
+    );
+
+    setSelectedDayDetail((prev) =>
+      prev
+        ? {
+            ...prev,
+            employee: updatedEmployee,
+            task,
+            leave,
+            status: buildStatus(
+              task,
+              leave,
+              isWeekendDay(selectedDayDetail.day)
+            ),
+          }
+        : null
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees, selectedDayDetail?.day]); 
 
   return (
     <div className="w-full p-2 sm:p-6 bg-gray-50 dark:bg-slate-950/50 min-h-screen">
       <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100 dark:border-slate-800 flex flex-col h-auto sm:h-[800px]">
         
-        {/* Responsive Header Section */}
         <div className="bg-indigo-600 dark:bg-indigo-900 text-white p-5 sm:p-8 flex-shrink-0">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="text-center sm:text-left">
@@ -215,19 +234,17 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
             </div>
             
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-              {/* Search Bar for Mobile/Tablet */}
               <div className="relative w-full sm:w-64 sm:hidden">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 w-4 h-4" />
                 <input 
                   type="text" 
                   placeholder="Search Employee..." 
                   value={mobileSearch}
-                  onChange={(e) => setMobileSearch(e.target.value)}
+                  onChange={(ev) => setMobileSearch(ev.target.value)}
                   className="w-full bg-indigo-700/50 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-xs font-bold placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20"
                 />
               </div>
 
-              {/* Month Navigation */}
               <div className="flex gap-2 bg-indigo-700/50 p-1.5 rounded-2xl border border-white/10 w-full sm:w-auto justify-center">
                 <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><ChevronLeft size={20}/></button>
                 <div className="px-4 sm:px-6 py-2 font-black text-[10px] sm:text-xs bg-white text-indigo-600 rounded-xl shadow-lg flex items-center uppercase">{monthName}</div>
@@ -237,9 +254,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
           </div>
         </div>
 
-        {/* Responsive Content: Table for Desktop, Cards for Mobile */}
         <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-indigo-200 dark:scrollbar-thumb-slate-800">
-          {/* Desktop Table View */}
           <table className="hidden sm:table w-full border-separate border-spacing-0 table-fixed min-w-max">
             <thead className="sticky top-0 z-[60]">
               <tr className="bg-gray-100 dark:bg-slate-800">
@@ -272,7 +287,6 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
             </tbody>
           </table>
 
-          {/* Mobile Card Directory View */}
           <div className="sm:hidden p-4 space-y-4">
             {filteredEmployees?.map((employee) => (
               <div key={employee.user.id} className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
@@ -300,7 +314,6 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
           </div>
         </div>
 
-        {/* Legend / Footer */}
         <div className="p-4 sm:p-6 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 flex-shrink-0">
           <div className="flex flex-wrap gap-2 sm:gap-4 justify-center text-center">
             <LegendItem color="bg-green-100 text-green-600" label="Task" symbol="T✓" />
@@ -346,18 +359,14 @@ const DayDetailModal: React.FC<{
   onUpdateFeedback: (date: string, employeeId: number, comment: string, assignedTasks?: AssignedTask[]) => Promise<boolean>;
   onAssignTasks: (date: string, employeeId: number, assignedTasks: AssignedTask[]) => Promise<boolean>;
   onUpdateDayLeaveStatus?: (leaveId: number, targetDate: string, newType: string, newStatus: string, comment: string) => Promise<boolean>;
-}> = ({ detail, dbCompanies = [], onSaveNewCompany, onClose, onUpdateFeedback, onAssignTasks, onUpdateDayLeaveStatus }) => {
+}> = ({ detail, dbCompanies = [], onClose, onUpdateFeedback, onAssignTasks, onUpdateDayLeaveStatus }) => {
 
   const [comment, setComment] = useState(detail.leave?.managerComment || detail.task?.managerComment || '');
   const [selectedType, setSelectedType] = useState<string>(detail.leave?.type || 'FULL');
   const [isSaving, setIsSaving] = useState(false);
-  const [addSuccess, setAddSuccess] = useState(false);
   const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>(detail.task?.assignedTasks || []);
   const [newTaskCompany, setNewTaskCompany] = useState(dbCompanies?.[0] || '');
   const [newTaskContent, setNewTaskContent] = useState('');
-  const [isAddingNewCompany, setIsAddingNewCompany] = useState(false);
-  const [newCompanyName, setNewCompanyName] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleAddAssignment = async () => {
     if (!newTaskContent || newTaskContent === '<p><br></p>') { toast.warning('Enter task details'); return; }
@@ -368,8 +377,6 @@ const DayDetailModal: React.FC<{
     if (success) {
       setAssignedTasks(updatedTasks);
       setNewTaskContent('');
-      setAddSuccess(true);
-      setTimeout(() => setAddSuccess(false), 2000);
     }
     setIsSaving(false);
   };
@@ -377,13 +384,19 @@ const DayDetailModal: React.FC<{
   const handleCentralUpdate = async () => {
     setIsSaving(true);
     let success = false;
-    if (detail.leave && onUpdateDayLeaveStatus) {
-      success = await onUpdateDayLeaveStatus(detail.leave.id, detail.date, selectedType, 'APPROVED', comment);
-    } else {
-      success = await onUpdateFeedback(detail.date, detail.employee.user.id, comment, assignedTasks);
+    try {
+      if (detail.leave && onUpdateDayLeaveStatus) {
+        success = await onUpdateDayLeaveStatus(detail.leave.id, detail.date, selectedType, 'APPROVED', comment);
+      } else {
+        success = await onUpdateFeedback(detail.date, detail.employee.user.id, comment, assignedTasks);
+      }
+      if (success) { toast.success('Record synchronized'); onClose(); }
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error('Sync failed');
+    } finally {
+      setIsSaving(false);
     }
-    if (success) { toast.success('Record synchronized'); onClose(); }
-    setIsSaving(false);
   };
 
   const formatAssignedAt = (dateString?: string | null) => {
@@ -392,7 +405,10 @@ const DayDetailModal: React.FC<{
       return new Date(dateString).toLocaleString("en-IN", {
         day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true,
       });
-    } catch (e) { return ""; }
+    } catch (error) { 
+      console.error(error);
+      return ""; 
+    }
   };
 
   return (
@@ -418,7 +434,7 @@ const DayDetailModal: React.FC<{
             <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 sm:h-[600px]">
               <div className="flex items-center gap-3 flex-shrink-0"><ListTodo className="w-5 h-5 text-indigo-600" /><h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Assign Tasks</h3></div>
               <div className="space-y-4">
-                <select value={newTaskCompany} onChange={(e) => setNewTaskCompany(e.target.value)} className="w-full bg-white dark:bg-slate-900 border-2 border-indigo-100 dark:border-indigo-800 p-2.5 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none">
+                <select value={newTaskCompany} onChange={(ev) => setNewTaskCompany(ev.target.value)} className="w-full bg-white dark:bg-slate-900 border-2 border-indigo-100 dark:border-indigo-800 p-2.5 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none">
                   {dbCompanies.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border-2 border-indigo-100 dark:border-indigo-800 h-[160px] flex flex-col 
@@ -456,10 +472,62 @@ const DayDetailModal: React.FC<{
             <div className="bg-amber-50/50 dark:bg-amber-950/10 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-amber-100 dark:border-amber-900/30 flex flex-col space-y-4 h-auto sm:h-[600px]">
               <div className="flex items-center gap-2 text-amber-800 dark:text-amber-500"><Edit3 size={18} /><h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest">Manager Action</h3></div>
               <div className="space-y-4 flex-1">
-                <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30"><label className="text-[9px] font-black text-amber-700 uppercase block mb-1">Live Status</label><p className="text-sm font-bold text-slate-800 dark:text-slate-200">{detail.status}</p></div>
-                <div className="flex-1"><label className="text-[9px] font-black text-amber-700 uppercase block mb-2 tracking-widest">Feedback</label><textarea className="w-full h-40 bg-white dark:bg-slate-900 border-2 border-amber-100 dark:border-amber-900/30 p-3 rounded-xl text-sm outline-none focus:border-indigo-500 resize-none shadow-sm dark:text-white font-medium" placeholder="Provide feedback..." value={comment} onChange={(e) => setComment(e.target.value)} /></div>
+                {/* Live Status Card */}
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                  <label className="text-[9px] font-black text-amber-700 uppercase block mb-1">Live Status</label>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{detail.status}</p>
+                </div>
+
+                {/* Leave Customization (Restored Dropdown) */}
+                {detail.leave && (
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border-2 border-indigo-100 dark:border-indigo-900/30 space-y-3 animate-in slide-in-from-top-2">
+                    <div>
+                      <label className="text-[9px] font-black text-indigo-600 uppercase block mb-1">Modify Leave Category</label>
+                      <select 
+                        value={selectedType} 
+                        onChange={(ev) => setSelectedType(ev.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="FULL">Full Day</option>
+                        <option value="HALF">Half Day</option>
+                        <option value="EARLY">Early Leave</option>
+                        <option value="LATE">Late Coming</option>
+                        <option value="WORK_FROM_HOME">WFH</option>
+                      </select>
+                    </div>
+                    
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <label className="text-[9px] font-black text-amber-700 uppercase flex items-center gap-1 mb-1">
+                        <FileText size={10} /> Employee Justification
+                      </label>
+                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">
+                        &quot;{detail.leave.reason}&quot;
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex-1">
+                  <label className="text-[9px] font-black text-amber-700 uppercase block mb-2 tracking-widest">Feedback / Comment</label>
+                  <div className="relative group h-32 lg:h-40">
+                    <MessageSquare size={16} className="absolute top-3 left-3 text-amber-300 group-focus-within:text-indigo-500 transition-colors" />
+                    <textarea 
+                      className="w-full h-full bg-white dark:bg-slate-900 border-2 border-amber-100 dark:border-amber-900/30 pl-10 pr-3 py-3 rounded-xl text-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 resize-none shadow-sm dark:text-white font-medium" 
+                      placeholder="Add manager comments here..." 
+                      value={comment} 
+                      onChange={(ev) => setComment(ev.target.value)} 
+                    />
+                  </div>
+                </div>
               </div>
-              <button onClick={handleCentralUpdate} disabled={isSaving} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl">{isSaving ? 'Syncing...' : 'Save & Sync'}</button>
+              <button 
+                onClick={handleCentralUpdate} 
+                disabled={isSaving} 
+                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 group disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />}
+                {isSaving ? 'Syncing...' : 'Save & Sync Record'}
+              </button>
             </div>
           </div>
         </div>
@@ -467,5 +535,9 @@ const DayDetailModal: React.FC<{
     </div>
   );
 };
+
+const Loader2 = ({ className, size = 16 }: { className?: string, size?: number }) => (
+  <RefreshCcw className={className} size={size} />
+);
 
 export default EmployeeWorkStatusTable;

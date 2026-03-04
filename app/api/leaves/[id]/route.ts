@@ -38,10 +38,10 @@ export async function PATCH(
           await sendLeaveNotification({
             mode: 'COMMENT',
             leave: updatedLeave,
-            employeeName: updatedLeave.user.name,
+            employeeName: updatedLeave.user.name ?? 'Employee',
             employeeEmail: updatedLeave.user.email
           });
-        } catch (e) { console.error("Comment notification failed"); }
+        } catch (e) { console.error("Comment notification failed", e); }
 
         return NextResponse.json(updatedLeave);
       }
@@ -72,10 +72,10 @@ export async function PATCH(
           await sendLeaveNotification({
             mode: status.toUpperCase(), 
             leave: updatedLeave,
-            employeeName: updatedLeave.user.name,
+            employeeName: updatedLeave.user.name ?? 'Employee',
             employeeEmail: updatedLeave.user.email
           });
-        } catch (e) { console.error("Decision notification failed"); }
+        } catch (e) { console.error("Decision notification failed", e); }
 
         return NextResponse.json(updatedLeave);
       }
@@ -95,7 +95,6 @@ export async function PATCH(
         }, { status: 403 });
       }
 
-      // Updated to match potential schema fields like startTime/endTime
       const updatedLeave = await prisma.leave.update({
         where: { id: parseInt(id) },
         data: {
@@ -118,20 +117,21 @@ export async function PATCH(
         await sendLeaveNotification({
           mode: 'EDIT',
           leave: updatedLeave,
-          employeeName: updatedLeave.user.name,
+          employeeName: updatedLeave.user.name ?? 'Employee',
           employeeEmail: updatedLeave.user.email,
           editSummary: body.editSummary || "Updated details"
         });
-      } catch (e) { console.error("Edit notification failed"); }
+      } catch (e) { console.error("Edit notification failed", e); }
 
       return NextResponse.json(updatedLeave);
     }
 
     return NextResponse.json({ error: 'Unauthorized action' }, { status: 401 });
 
-  } catch (err: any) {
-    console.error('Update leave error:', err);
-    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('Update leave error:', error);
+    return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }
 
@@ -164,8 +164,9 @@ export async function DELETE(
     });
 
     return NextResponse.json({ message: 'Leave deleted successfully' });
-  } catch (err: any) {
-    console.error('Delete leave error:', err);
-    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('Delete leave error:', error);
+    return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }

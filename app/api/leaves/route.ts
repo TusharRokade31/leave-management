@@ -52,35 +52,34 @@ export async function POST(req: NextRequest) {
     });
 
     // --- NOTIFICATION LOGIC ---
-    // Trigger notification after successful creation
     try {
       await sendLeaveNotification({
         mode: 'NEW',
         leave: leave,
-        employeeName: leave.user.name,
+        employeeName: leave.user.name ?? 'Employee', // Fixed red line: added null coalescing
         employeeEmail: leave.user.email
       });
     } catch (emailErr) {
-      // We log the error but don't stop the response because the leave was successfully created
       console.error('Notification failed but leave was created:', emailErr);
     }
     // ---------------------------
 
     return NextResponse.json(leave, { status: 201 });
-  } catch (err: any) {
+  } catch (err: unknown) { // Fixed red line: changed 'any' to 'unknown'
+    const errorMessage = err instanceof Error ? err.message : 'Server error';
     console.error('Create leave error:', err);
-    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
 
-// GET function remains exactly the same as your provided code
 export async function GET(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
     const { searchParams } = new URL(req.url);
     const userIdParam = searchParams.get('userId');
 
-    let whereClause: any = {};
+    // Fixed red line: properly typed whereClause instead of any
+    const whereClause: { userId?: number } = {};
 
     if (authUser.role === 'MANAGER') {
       if (userIdParam) {
@@ -106,8 +105,9 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json(leaves);
-  } catch (err: any) {
+  } catch (err: unknown) { // Fixed red line: changed 'any' to 'unknown'
+    const errorMessage = err instanceof Error ? err.message : 'Server error';
     console.error('Get leaves error:', err);
-    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
