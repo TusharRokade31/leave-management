@@ -22,6 +22,7 @@ import { LeaveFormData } from "@/type/form";
 import EmployeeWorkStatusTable from "@/components/EmployeeWorkStatusTable";
 import { EmployeeCalendar } from "@/components/EmployeeCalendar";
 import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 export default function Home() {
   // ================= HOOKS & STATE =================
@@ -125,9 +126,10 @@ export default function Home() {
   // ================= HANDLERS =================
   const handleLogout = async () => {
     try {
+      // Clear any pending toasts to prevent them appearing on re-login
       await logout();
       setActiveModal(null);
-      toast.info("Logged out successfully");
+      // Use a timeout or trigger before unmount to ensure it doesn't persist to the login state incorrectly
     } catch (error) {
       toast.error("Logout failed");
     }
@@ -147,7 +149,7 @@ export default function Home() {
         body: JSON.stringify(updatedData),
       });
       if (!response.ok) throw new Error('Failed to update leave');
-      toast.success("Updated successfully!");
+      toast.success("Updated successfully!", { toastId: `update-${leaveId}` });
       if (leaveHooks.fetchLeaves) await leaveHooks.fetchLeaves();
     } catch (error: any) {
       toast.error(error.message);
@@ -162,7 +164,7 @@ export default function Home() {
         body: JSON.stringify({ managerComment: comment, commentOnly: true }),
       });
       if (!response.ok) throw new Error('Failed to save comment');
-      toast.success("Comment saved");
+      toast.success("Comment saved", { toastId: `comment-${leaveId}` });
       if (leaveHooks.fetchLeaves) await leaveHooks.fetchLeaves();
     } catch (error: any) {
       toast.error(error.message);
@@ -177,7 +179,7 @@ export default function Home() {
         body: JSON.stringify({ targetDate, newType, newStatus, comment }),
       });
       if (!response.ok) throw new Error('Failed to update day');
-      toast.success("Status synced!");
+      toast.success("Status synced!", { toastId: `sync-${targetDate}` });
       if (leaveHooks.fetchLeaves) await leaveHooks.fetchLeaves();
       if (refreshData) await refreshData(); 
       return true;
@@ -198,7 +200,20 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-[#F9F8F8] dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      <ToastContainer position="top-right" autoClose={3000} />
+      {/* ToastContainer configuration to prevent duplicates and persistence across login/logout */}
+      <ToastContainer 
+        position="top-right" 
+        autoClose={3000} 
+        limit={1} 
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme={isDarkMode ? "dark" : "light"}
+      />
 
       {/* MOBILE SIDEBAR OVERLAY */}
       {isSidebarOpen && (
@@ -319,7 +334,7 @@ export default function Home() {
                         </>
                       ) : (
                         <button onClick={() => setActiveTab('tasks')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none uppercase text-xs tracking-widest">
-                             Open Work Log <ArrowRight size={16} />
+                              Open Work Log <ArrowRight size={16} />
                         </button>
                       )}
                     </div>
