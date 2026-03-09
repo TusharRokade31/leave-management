@@ -85,7 +85,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel }) => {
       }
 
       await onSubmit(submitData as LeaveFormData);
-      toast.success('Leave request submitted!');
       
       setFormData({
         startDate: '',
