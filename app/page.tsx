@@ -49,6 +49,7 @@ export default function Home() {
     updateUser,
     companies,
     saveNewCompany,
+    hideCompany, // <--- Extract from hook
     refreshData 
   } = useEmployeeWorkStatus(currentUser, currentMonth);
 
@@ -359,12 +360,16 @@ export default function Home() {
                      {currentUser.role === 'MANAGER' ? (
                         workStatusLoading ? <div className="p-12 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest animate-pulse">Aggregating Team Data...</div> : (
                           <EmployeeWorkStatusTable 
-                            employees={visibleEmployees as any} companies={companies} onSaveNewCompany={saveNewCompany}
-                            currentMonth={currentMonth} onMonthChange={setCurrentMonth} 
-                            onUpdateFeedback={updateTaskFeedback}
-                            onAssignTasks={addAssignedTasks} 
-                            onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
-                          />
+  employees={visibleEmployees as any} 
+  companies={companies} 
+  onSaveNewCompany={saveNewCompany}
+  hideCompany={hideCompany} // <--- ADD THIS LINE HERE
+  currentMonth={currentMonth} 
+  onMonthChange={setCurrentMonth} 
+  onUpdateFeedback={updateTaskFeedback}
+  onAssignTasks={addAssignedTasks} 
+  onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
+/>
                         )
                     ) : (
                       <div className="p-2 lg:p-6 flex justify-center overflow-x-auto"><EmployeeCalendar ref={calendarRef} /></div>

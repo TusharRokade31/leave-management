@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Calendar, Clock, Edit3, ListTodo, Trash2, ChevronLeft, ChevronRight, Search, FileText, Send, MessageSquare, RefreshCcw } from 'lucide-react';
+import { X, Calendar, Clock, Edit3, ListTodo, Trash2, ChevronLeft, ChevronRight, Search, FileText, Send, MessageSquare, RefreshCcw, PlusCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import dynamic from 'next/dynamic';
 
@@ -70,6 +70,7 @@ interface EmployeeWorkStatusTableProps {
   employees: Employee[];
   companies: string[];
   onSaveNewCompany: (name: string) => Promise<void>;
+  hideCompany: (name: string) => void; // <--- ADD THIS LINE
   currentMonth: Date;
   onMonthChange: (date: Date) => void;
   onUpdateFeedback: (date: string, employeeId: number, comment: string, assignedTasks?: AssignedTask[]) => Promise<boolean>;
@@ -106,6 +107,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
   employees,
   companies = [],
   onSaveNewCompany,
+  hideCompany, // <--- ADD THIS HERE
   currentMonth,
   onMonthChange,
   onUpdateFeedback,
@@ -331,6 +333,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
           detail={selectedDayDetail}
           dbCompanies={companies.length > 0 ? companies : DEFAULT_COMPANIES}
           onSaveNewCompany={onSaveNewCompany}
+          hideCompany={hideCompany} // <--- ADD THIS LINE
           onClose={() => setSelectedDayDetail(null)}
           onUpdateFeedback={onUpdateFeedback}
           onAssignTasks={onAssignTasks}
@@ -348,6 +351,7 @@ const LegendItem = ({ color, label, symbol }: { color: string; label: string; sy
   </div>
 );
 
+
 /* ─────────────────────────────────────────────────────────
     Day Detail Modal (Fully Responsive)
 ───────────────────────────────────────────────────────── */
@@ -356,10 +360,11 @@ const DayDetailModal: React.FC<{
   dbCompanies: string[];
   onSaveNewCompany: (name: string) => Promise<void>;
   onClose: () => void;
+  hideCompany: (name: string) => void; // <--- ADD THIS LINE
   onUpdateFeedback: (date: string, employeeId: number, comment: string, assignedTasks?: AssignedTask[]) => Promise<boolean>;
   onAssignTasks: (date: string, employeeId: number, assignedTasks: AssignedTask[]) => Promise<boolean>;
   onUpdateDayLeaveStatus?: (leaveId: number, targetDate: string, newType: string, newStatus: string, comment: string) => Promise<boolean>;
-}> = ({ detail, dbCompanies = [], onClose, onUpdateFeedback, onAssignTasks, onUpdateDayLeaveStatus }) => {
+}> = ({ detail, dbCompanies = [],onSaveNewCompany,hideCompany, onClose, onUpdateFeedback, onAssignTasks, onUpdateDayLeaveStatus }) => {
 
   const [comment, setComment] = useState(detail.leave?.managerComment || detail.task?.managerComment || '');
   const [selectedType, setSelectedType] = useState<string>(detail.leave?.type || 'FULL');
@@ -367,6 +372,8 @@ const DayDetailModal: React.FC<{
   const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>(detail.task?.assignedTasks || []);
   const [newTaskCompany, setNewTaskCompany] = useState(dbCompanies?.[0] || '');
   const [newTaskContent, setNewTaskContent] = useState('');
+  const [isAddingCompany, setIsAddingCompany] = useState(false);
+const [newCompanyName, setNewCompanyName] = useState('');
 
   const handleAddAssignment = async () => {
     if (!newTaskContent || newTaskContent === '<p><br></p>') { toast.warning('Enter task details'); return; }
@@ -430,32 +437,144 @@ const DayDetailModal: React.FC<{
         <div className="p-4 sm:p-8 overflow-y-auto flex-1 scrollbar-hide">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
             
-            {/* Column 1: Assign Tasks */}
-            <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 sm:h-[600px]">
-              <div className="flex items-center gap-3 flex-shrink-0"><ListTodo className="w-5 h-5 text-indigo-600" /><h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Assign Tasks</h3></div>
-              <div className="space-y-4">
-                <select value={newTaskCompany} onChange={(ev) => setNewTaskCompany(ev.target.value)} className="w-full bg-white dark:bg-slate-900 border-2 border-indigo-100 dark:border-indigo-800 p-2.5 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none">
-                  {dbCompanies.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border-2 border-indigo-100 dark:border-indigo-800 h-[160px] flex flex-col 
-                  [&_.ql-toolbar]:border-none [&_.ql-toolbar]:bg-slate-50 dark:[&_.ql-toolbar]:bg-slate-800/50 [&_.ql-toolbar]:flex-shrink-0
-                  [&_.ql-container]:flex-1 [&_.ql-container]:flex [&_.ql-container]:flex-col [&_.ql-container]:min-h-0 [&_.ql-container]:border-none
-                  [&_.ql-editor]:flex-1 [&_.ql-editor]:overflow-y-auto [&_.ql-editor]:max-h-full [&_.ql-editor]:absolute [&_.ql-editor]:inset-0">
-                  <ReactQuill theme="snow" value={newTaskContent} onChange={setNewTaskContent} className="flex-1 flex flex-col min-h-0 overflow-hidden" modules={{ toolbar: [['bold', 'italic'], [{ list: 'bullet' }]] }} placeholder="Task details..." />
-                </div>
-                <button onClick={handleAddAssignment} disabled={isSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all">{isSaving ? 'Syncing...' : 'Add Task'}</button>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
-                {assignedTasks.map((item, idx) => (
-                  <div key={idx} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-indigo-50 dark:border-slate-700 shadow-sm relative">
-                    <div className="flex justify-between items-start mb-2"><span className="text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase">{item.company}</span><button onClick={() => { const updated = assignedTasks.filter((_, i) => i !== idx); setAssignedTasks(updated); onAssignTasks(detail.date, detail.employee.user.id, updated); }} className="text-slate-300 hover:text-red-500"><Trash2 size={14}/></button></div>
-                    <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: item.task }} />
-                    <div className="mt-2 text-[8px] font-bold text-slate-400 flex items-center gap-1"><Clock size={10}/>{formatAssignedAt(item.assignedAt)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+     {/* Column 1: Assign Tasks */}
+<div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 sm:h-[600px]">
+  <div className="flex items-center gap-3 flex-shrink-0">
+    <ListTodo className="w-5 h-5 text-indigo-600" />
+    <h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Assign Tasks</h3>
+  </div>
 
+  <div className="space-y-4">
+    {/* UI BASED ADD COMPANY PROMPT */}
+    {isAddingCompany ? (
+      <div className="flex flex-col gap-2 p-3 bg-white dark:bg-slate-900 rounded-xl border-2 border-indigo-500 animate-in fade-in zoom-in-95 duration-200">
+        <label className="text-[10px] font-black uppercase text-indigo-600">New Company Name</label>
+        <div className="flex items-center gap-2">
+          <input 
+            autoFocus
+            type="text" 
+            value={newCompanyName}
+            onChange={(e) => setNewCompanyName(e.target.value)}
+            className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800 border-none rounded-lg p-2 text-xs font-bold outline-none"
+            placeholder="Type name..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newCompanyName.trim()) {
+                onSaveNewCompany(newCompanyName.trim());
+                setNewTaskCompany(newCompanyName.trim());
+                setNewCompanyName('');
+                setIsAddingCompany(false);
+              }
+            }}
+          />
+          <div className="flex gap-1 flex-shrink-0">
+            <button 
+              onClick={async () => {
+                if (newCompanyName.trim()) {
+                  await onSaveNewCompany(newCompanyName.trim());
+                  setNewTaskCompany(newCompanyName.trim());
+                  setNewCompanyName('');
+                  setIsAddingCompany(false);
+                }
+              }}
+              className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+            >
+              <Send size={14} />
+            </button>
+            <button 
+              onClick={() => setIsAddingCompany(false)} 
+              className="p-2 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded-lg"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : (
+      <div className="flex gap-2 relative">
+        <div className="flex-1 relative">
+          {/* CUSTOM DROPDOWN INPUT */}
+          <div className="relative">
+            <input
+              type="text"
+              readOnly
+              value={newTaskCompany}
+              onClick={() => {
+                const menu = document.getElementById('company-dropdown-menu');
+                menu?.classList.toggle('hidden');
+              }}
+              className="w-full bg-white dark:bg-slate-900 border-2 border-indigo-100 dark:border-indigo-800 p-2.5 rounded-xl text-xs font-bold focus:border-indigo-500 outline-none cursor-pointer"
+              placeholder="Select Company..."
+            />
+            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 rotate-90 pointer-events-none" />
+          </div>
+
+          {/* DROPDOWN MENU LIST */}
+          <div id="company-dropdown-menu" className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-[300] max-h-48 overflow-y-auto hidden">
+            {dbCompanies.map((c) => (
+              <div 
+                key={c} 
+                className="flex items-center justify-between px-4 py-2.5 border-b border-slate-50 dark:border-slate-800 last:border-none hover:bg-indigo-50 dark:hover:bg-indigo-900/30 cursor-pointer"
+                onClick={() => {
+                  setNewTaskCompany(c);
+                  document.getElementById('company-dropdown-menu')?.classList.add('hidden');
+                }}
+              >
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{c}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation(); 
+                    hideCompany(c);
+                    if (newTaskCompany === c) setNewTaskCompany('');
+                  }}
+                  className="p-1.5 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg transition-all active:scale-90"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        <button 
+          type="button"
+          onClick={() => setIsAddingCompany(true)}
+          className="p-2.5 bg-white dark:bg-slate-900 border-2 border-indigo-100 dark:border-indigo-800 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm shrink-0"
+        >
+          <PlusCircle size={20} />
+        </button>
+      </div>
+    )}
+
+    {/* QUILL EDITOR */}
+    <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border-2 border-indigo-100 dark:border-indigo-800 h-[140px] flex flex-col">
+      <ReactQuill theme="snow" value={newTaskContent} onChange={setNewTaskContent} className="flex-1 flex flex-col min-h-0 overflow-hidden" modules={{ toolbar: [['bold', 'italic'], [{ list: 'bullet' }]] }} placeholder="Task details..." />
+    </div>
+
+    <button onClick={handleAddAssignment} disabled={isSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+      {isSaving ? 'Syncing...' : 'Add Task'}
+    </button>
+  </div>
+
+  {/* ASSIGNED TASKS LIST */}
+  <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
+    {assignedTasks.map((item, idx) => (
+      <div key={idx} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-indigo-50 dark:border-slate-700 shadow-sm relative group/item">
+        <div className="flex justify-between items-start mb-2">
+          <span className="text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase">{item.company}</span>
+          <button onClick={() => { const updated = assignedTasks.filter((_, i) => i !== idx); setAssignedTasks(updated); onAssignTasks(detail.date, detail.employee.user.id, updated); }} className="text-slate-300 hover:text-red-500 transition-colors">
+            <Trash2 size={14}/>
+          </button>
+        </div>
+        <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: item.task }} />
+        <div className="mt-2 text-[8px] font-bold text-slate-400 flex items-center gap-1">
+          <Clock size={10}/>
+          {formatAssignedAt(item.assignedAt)}
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
             {/* Column 2: Employee Submission */}
             <div className="bg-gray-50 dark:bg-slate-800/30 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-gray-100 dark:border-slate-800 flex flex-col h-auto sm:h-[600px]">
               <h3 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Employee Submission</h3>
@@ -480,32 +599,35 @@ const DayDetailModal: React.FC<{
 
                 {/* Leave Customization (Restored Dropdown) */}
                 {detail.leave && (
-                  <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border-2 border-indigo-100 dark:border-indigo-900/30 space-y-3 animate-in slide-in-from-top-2">
-                    <div>
-                      <label className="text-[9px] font-black text-indigo-600 uppercase block mb-1">Modify Leave Category</label>
-                      <select 
-                        value={selectedType} 
-                        onChange={(ev) => setSelectedType(ev.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value="FULL">Full Day</option>
-                        <option value="HALF">Half Day</option>
-                        <option value="EARLY">Early Leave</option>
-                        <option value="LATE">Late Coming</option>
-                        <option value="WORK_FROM_HOME">WFH</option>
-                      </select>
-                    </div>
-                    
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <label className="text-[9px] font-black text-amber-700 uppercase flex items-center gap-1 mb-1">
-                        <FileText size={10} /> Employee Justification
-                      </label>
-                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">
-                        &quot;{detail.leave.reason}&quot;
-                      </p>
-                    </div>
-                  </div>
-                )}
+  <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border-2 border-indigo-100 dark:border-indigo-900/30 space-y-3 animate-in slide-in-from-top-2">
+    <div>
+      <label className="text-[9px] font-black text-indigo-600 uppercase block mb-1">Modify Leave Category</label>
+      <select 
+        value={selectedType} 
+        onChange={(ev) => setSelectedType(ev.target.value)}
+        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+      >
+        <option value="FULL">Full Day</option>
+        <option value="HALF">Half Day</option>
+        <option value="EARLY">Early Leave</option>
+        <option value="LATE">Late Coming</option>
+        <option value="WORK_FROM_HOME">WFH</option>
+      </select>
+    </div>
+    
+    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+      <label className="text-[9px] font-black text-amber-700 uppercase flex items-center gap-1 mb-1">
+        <FileText size={10} /> Employee Justification
+      </label>
+      {/* FIXED: Added a max-height and overflow-y-auto to prevent layout breakage */}
+      <div className="max-h-[80px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-amber-200 dark:scrollbar-thumb-slate-700">
+        <p className="text-xs font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">
+          &quot;{detail.leave.reason}&quot;
+        </p>
+      </div>
+    </div>
+  </div>
+)}
 
                 <div className="flex-1">
                   <label className="text-[9px] font-black text-amber-700 uppercase block mb-2 tracking-widest">Feedback / Comment</label>
