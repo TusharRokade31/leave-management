@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Calendar, Clock, Edit3, ListTodo, Trash2, ChevronLeft, ChevronRight, Search, FileText, Send, MessageSquare, RefreshCcw, PlusCircle } from 'lucide-react';
+import { X, Calendar, Clock, Edit3, ListTodo, Trash2, ChevronLeft, ChevronRight, Search, FileText, Send,CheckSquare, MessageSquare, RefreshCcw, PlusCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import dynamic from 'next/dynamic';
 
@@ -21,8 +21,10 @@ interface AssignedTask {
   task: string;
   isDone: boolean;
   assignedAt?: string;
+  createdAt?: string; // ⭐ Added fallback for DB timestamps
   companyName?: string;
   taskTitle?: string;
+  status?: string;    // ⭐ Added to fix TypeScript red lines
 }
 
 interface Task {
@@ -557,23 +559,71 @@ const [newCompanyName, setNewCompanyName] = useState('');
   </div>
 
   {/* ASSIGNED TASKS LIST */}
-  <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
-    {assignedTasks.map((item, idx) => (
-      <div key={idx} className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-indigo-50 dark:border-slate-700 shadow-sm relative group/item">
+<div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-indigo-200 dark:scrollbar-thumb-slate-700">
+  {assignedTasks.map((item, idx) => {
+    // 1. Logic for completion check
+    const isCompleted = item.status === 'COMPLETED' || item.isDone;
+    
+    // 2. ⭐ Fix for "Just now" issue: 
+    // Check assignedAt first, then createdAt (which Prisma uses by default)
+    const displayTime = item.assignedAt || item.createdAt;
+
+    return (
+      <div key={item.id ?? idx} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-indigo-100 dark:border-slate-700 shadow-sm relative group/item">
         <div className="flex justify-between items-start mb-2">
-          <span className="text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase">{item.company}</span>
-          <button onClick={() => { const updated = assignedTasks.filter((_, i) => i !== idx); setAssignedTasks(updated); onAssignTasks(detail.date, detail.employee.user.id, updated); }} className="text-slate-300 hover:text-red-500 transition-colors">
+          <div className="flex flex-wrap gap-2">
+            <span className="text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase tracking-tighter">
+              {item.company}
+            </span>
+            {/* STATUS BADGE */}
+            <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-tighter border ${
+              isCompleted 
+                ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                : item.status === 'IN_PROGRESS'
+                ? 'bg-blue-50 text-blue-600 border-blue-100'
+                : 'bg-amber-50 text-amber-600 border-amber-100'
+            }`}>
+              {item.status || 'ASSIGNED'}
+            </span>
+          </div>
+          
+          <button 
+            onClick={() => { 
+              const updated = assignedTasks.filter((_, i) => i !== idx); 
+              setAssignedTasks(updated); 
+              onAssignTasks(detail.date, detail.employee.user.id, updated); 
+            }} 
+            className="text-slate-300 hover:text-red-500 transition-colors shrink-0"
+          >
             <Trash2 size={14}/>
           </button>
         </div>
-        <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: item.task }} />
-        <div className="mt-2 text-[8px] font-bold text-slate-400 flex items-center gap-1">
-          <Clock size={10}/>
-          {formatAssignedAt(item.assignedAt)}
+
+        <div className="flex items-start gap-3">
+          {/* COMPLETION CHECKBOX */}
+          <div className={`mt-1 flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center ${
+            isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-slate-50 dark:bg-slate-800'
+          }`}>
+            {isCompleted && <CheckSquare size={10} className="text-white" />}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div 
+              className={`text-[11px] font-medium leading-relaxed ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-300'}`} 
+              dangerouslySetInnerHTML={{ __html: item.task }} 
+            />
+            
+            <div className="mt-2 text-[8px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-widest">
+              <Clock size={10} className="text-indigo-400" />
+              {/* ⭐ Display logic updated to prioritize real timestamp */}
+              {displayTime ? formatAssignedAt(displayTime) : 'Just now'}
+            </div>
+          </div>
         </div>
       </div>
-    ))}
-  </div>
+    );
+  })}
+</div>
 </div>
             {/* Column 2: Employee Submission */}
             <div className="bg-gray-50 dark:bg-slate-800/30 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-gray-100 dark:border-slate-800 flex flex-col h-auto sm:h-[600px]">

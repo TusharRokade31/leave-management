@@ -52,7 +52,9 @@ const fetcher = async (url: string) => {
 
   const map: Record<string, TaskData> = {};
   data?.forEach((t: any) => {
-    map[format(new Date(t.date), "yyyy-MM-dd")] = {
+    const dateKey = format(new Date(t.date), "yyyy-MM-dd");
+    
+    map[dateKey] = {
       content: t.content || "",
       managerComment: t.managerComment || "",
       assignedTasks: (t.assignedTasks || []).map((at: any) => ({
@@ -60,6 +62,8 @@ const fetcher = async (url: string) => {
         company: at.company || at.companyName || "Internal",
         task: at.task || at.taskTitle || "",
         isDone: Boolean(at.isDone),
+        // ⭐ ADD THIS: Ensure status is passed for the Matrix View
+        status: at.status || (at.isDone ? "COMPLETED" : "ASSIGNED"), 
         assignedAt: at.assignedAt || at.createdAt
       }))
     };
@@ -104,21 +108,30 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
   };
 
   const handleDayClick = (date: Date) => {
-    if (!viewOnly && isFutureDate(date)) return;
-    const dateKey = format(date, "yyyy-MM-dd");
-    const existingTask = tasks[dateKey];
-    
-    const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
-    const hasRealContent = existingTask?.content && existingTask.content !== '<p><br></p>';
-    const missing = isPast && !hasRealContent && !viewOnly;
-    
-    setIsMissingTask(missing);
-    setSelectedDate(date);
-    setCurrentPointers(existingTask?.content || "");
-    setCurrentComment(existingTask?.managerComment || "");
-    setCurrentAssignedTasks(existingTask?.assignedTasks || []); 
-    setShowModal(true);
-  };
+  if (!viewOnly && isFutureDate(date)) return;
+  const dateKey = format(date, "yyyy-MM-dd");
+  
+  // 1. Get the day data from your SWR map
+  const existingDay = tasks[dateKey];
+  
+  const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
+  const hasRealContent = existingDay?.content && existingDay.content !== '<p><br></p>';
+  const missing = isPast && !hasRealContent && !viewOnly;
+  
+  setIsMissingTask(missing);
+  setSelectedDate(date);
+  
+  // 2. Set content/comments
+  setCurrentPointers(existingDay?.content || "");
+  setCurrentComment(existingDay?.managerComment || "");
+  
+  // 3. ⭐ THE CRITICAL FIX: 
+  // Ensure we pull assignedTasks even if the 'Task' log doesn't exist yet.
+  // If your fetcher is correctly mapping dates, this will now find the queue.
+  setCurrentAssignedTasks(existingDay?.assignedTasks || []); 
+  
+  setShowModal(true);
+};
 
   const performSave = async (assignedToSave?: AssignedTask[]) => {
     setIsSaving(true);
@@ -281,83 +294,79 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
-          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setShowModal(false)} />
-          <div className="relative bg-white dark:bg-slate-900 w-full max-w-7xl rounded-[1.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 flex flex-col max-h-[95vh] sm:max-h-[92vh]">
-            
-            {/* Header */}
-            <div className={`p-4 sm:p-8 text-white flex-shrink-0 flex items-center justify-between ${
-              isMissingTask ? "bg-red-600" : "bg-indigo-600"
-            }`}>
-              <div className="flex items-center gap-3 sm:gap-5">
-                <div className="w-10 h-10 sm:w-14 sm:h-14 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center border border-white/30 shrink-0">
-                  <CalendarIcon className="w-5 h-5 sm:w-7 sm:h-7" />
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
+    <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setShowModal(false)} />
+    <div className="relative bg-white dark:bg-slate-900 w-full max-w-7xl rounded-[1.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 flex flex-col max-h-[95vh] sm:max-h-[92vh]">
+      
+      {/* Header */}
+      <div className={`p-4 sm:p-8 text-white flex-shrink-0 flex items-center justify-between ${
+        isMissingTask ? "bg-red-600" : "bg-indigo-600"
+      }`}>
+        <div className="flex items-center gap-3 sm:gap-5">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center border border-white/30 shrink-0">
+            <CalendarIcon className="w-5 h-5 sm:w-7 sm:h-7" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-lg sm:text-2xl font-black tracking-tight truncate">{format(selectedDate, "EEEE, MMM dd")}</h3>
+            <p className="text-white/70 text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1">
+              {viewOnly ? "Review Mode" : "Task Lifecycle"}
+            </p>
+          </div>
+        </div>
+        <button onClick={() => setShowModal(false)} className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-black/10 hover:bg-black/20 rounded-xl transition-all cursor-pointer shrink-0">
+          <X className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={3} />
+        </button>
+      </div>
+      
+      <div className="p-4 sm:p-8 overflow-y-auto flex-1 scrollbar-hide">
+        {/* Dynamic Grid Layout: 3 cols if tasks exist, 2 cols if not */}
+        <div className={`grid gap-6 sm:gap-8 h-full ${
+          hasAssignedTasks 
+            ? "grid-cols-1 lg:grid-cols-3" 
+            : "grid-cols-1 lg:grid-cols-[1fr_380px]"
+        }`}>
+          
+          {/* Column 1: Assigned Tasks Queue */}
+          {hasAssignedTasks && (
+            <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 max-h-[400px] lg:max-h-[600px]">
+              <div className="flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <ListTodo className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
+                  <h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Queue</h3>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-lg sm:text-2xl font-black tracking-tight truncate">{format(selectedDate, "EEEE, MMM dd")}</h3>
-                  <p className="text-white/70 text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1">
-                    {viewOnly ? "Review Mode" : "Task Lifecycle"}
-                  </p>
-                </div>
+                {!viewOnly && isSelectedToday && hasPendingTasks && (
+                  <button onClick={handleMarkAllCompleted} className="text-[9px] sm:text-[10px] font-black text-indigo-600 uppercase border-b-2 border-indigo-200">
+                    Mark Done
+                  </button>
+                )}
               </div>
-              <button onClick={() => setShowModal(false)} className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-black/10 hover:bg-black/20 rounded-xl transition-all cursor-pointer shrink-0">
-                <X className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={3} />
-              </button>
-            </div>
-            
-            <div className="p-4 sm:p-8 overflow-y-auto flex-1 scrollbar-hide">
-              {/* 
-                LAYOUT LOGIC:
-                - Has assigned tasks  → 3 columns: Queue | Submission | Status
-                - No assigned tasks   → 2 columns: Submission (wider) | Status
-              */}
-              <div className={`grid gap-6 sm:gap-8 h-full ${
-                hasAssignedTasks 
-                  ? "grid-cols-1 lg:grid-cols-3" 
-                  : "grid-cols-1 lg:grid-cols-[1fr_380px]"
-              }`}>
-                
-                {/* Column 1: Assigned Tasks — only rendered when tasks exist */}
-                {hasAssignedTasks && (
-                  <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 max-h-[400px] lg:max-h-[600px]">
-                    <div className="flex items-center justify-between flex-shrink-0">
-                      <div className="flex items-center gap-3">
-                        <ListTodo className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
-                        <h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Queue</h3>
-                      </div>
-                      {!viewOnly && isSelectedToday && hasPendingTasks && (
-                        <button onClick={handleMarkAllCompleted} className="text-[9px] sm:text-[10px] font-black text-indigo-600 uppercase border-b-2 border-indigo-200">
-                          Mark Done
-                        </button>
-                      )}
-                    </div>
 
-                    <div className="flex-1 overflow-y-auto pr-1 space-y-3 scrollbar-thin scrollbar-thumb-indigo-200">
-                      {currentAssignedTasks.map((t, idx) => (
-                        <div key={t.id ?? idx} className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-indigo-50 shadow-sm group">
-                          <div className="flex items-start gap-3">
-                            <input 
-                              type="checkbox" 
-                              checked={t.isDone} 
-                              onChange={() => handleToggleAssignedTask(idx)}
-                              disabled={viewOnly || !isSelectedToday}
-                              className="mt-1 h-4 w-4 rounded border-indigo-200 text-indigo-600 cursor-pointer" 
-                            />
-                            <div className="flex-1 min-w-0">
-                              <span className="text-[7px] sm:text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase truncate block w-fit">{t.company}</span>
-                              <div className={`text-[10px] sm:text-[11px] mt-1 font-medium break-words ${t.isDone ? 'line-through text-gray-400' : 'text-gray-700 dark:text-slate-300'}`} dangerouslySetInnerHTML={{ __html: t.task }} />
-                              {t.assignedAt && (
-                                 <div className="flex items-center gap-1 mt-2 text-[7px] sm:text-[8px] font-bold text-gray-400">
-                                   <Clock size={10} /> {formatAssignedAt(t.assignedAt)}
-                                 </div>
-                              )}
-                            </div>
+              <div className="flex-1 overflow-y-auto pr-1 space-y-3 scrollbar-thin scrollbar-thumb-indigo-200">
+                {currentAssignedTasks.map((t, idx) => (
+                  <div key={t.id ?? idx} className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-indigo-50 shadow-sm group">
+                    <div className="flex items-start gap-3">
+                      <input 
+                        type="checkbox" 
+                        checked={t.isDone} 
+                        onChange={() => handleToggleAssignedTask(idx)}
+                        disabled={viewOnly || !isSelectedToday}
+                        className="mt-1 h-4 w-4 rounded border-indigo-200 text-indigo-600 cursor-pointer" 
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[7px] sm:text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase truncate block w-fit">{t.company}</span>
+                        <div className={`text-[10px] sm:text-[11px] mt-1 font-medium break-words ${t.isDone ? 'line-through text-gray-400' : 'text-gray-700 dark:text-slate-300'}`} dangerouslySetInnerHTML={{ __html: t.task }} />
+                        {t.assignedAt && (
+                          <div className="flex items-center gap-1 mt-2 text-[7px] sm:text-[8px] font-bold text-gray-400">
+                            <Clock size={10} /> {formatAssignedAt(t.assignedAt)}
                           </div>
-                        </div>
-                      ))}
+                        )}
+                      </div>
                     </div>
                   </div>
-                )}
+                ))}
+              </div>
+            </div>
+          )}
 
                 {/* Column 2: Employee Submission — expands to col-span-2 when no tasks */}
                 <div className="bg-gray-50 dark:bg-slate-800/30 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-gray-100 dark:border-slate-800 flex flex-col max-h-[400px] lg:max-h-[600px]">

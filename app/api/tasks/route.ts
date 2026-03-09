@@ -8,14 +8,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { date, content, managerComment, employeeId, assignedTasks } = body;
 
-    // 1. Normalize date to UTC midnight for Task table grouping
     const normalizedDate = new Date(date);
     normalizedDate.setUTCHours(0, 0, 0, 0);
 
     const isManager = authUser.role === 'MANAGER';
     const targetUserId = isManager && employeeId ? parseInt(employeeId) : authUser.id;
 
-    // 2. DATA PERSISTENCE (Daily Log & Feedback)
+    // 1. Primary Daily Log Record (Upsert for efficiency)
     const taskRecord = await prisma.task.upsert({
       where: { userId_date: { userId: targetUserId, date: normalizedDate } },
       update: { 
@@ -28,52 +27,62 @@ export async function POST(req: NextRequest) {
         content: content || "",
         managerComment: managerComment || null,
         status: 'PRESENT',
-        isCompleted: true,
+        isCompleted: false, 
       },
     });
 
-    // 3. QUEUE PERSISTENCE (AssignedTask Table)
+    // 2. Manager Assignment Persistence
     if (isManager && Array.isArray(assignedTasks)) {
       const dayEnd = new Date(normalizedDate);
       dayEnd.setUTCHours(23, 59, 59, 999);
 
       await prisma.$transaction([
-        // Clear old assignments for this specific day only
         prisma.assignedTask.deleteMany({
           where: { 
             userId: targetUserId, 
             createdAt: { gte: normalizedDate, lte: dayEnd } 
           }
         }),
-        // Re-insert with preserved timestamps
         prisma.assignedTask.createMany({
-          data: assignedTasks.map((t: any) => {
-            // ⭐ FIX: If the UI sends a timestamp (assignedAt), use it. 
-            // Otherwise, use current real-time (new Date()). 
-            // Never force it to normalized midnight (dayStart).
-            const timestamp = t.assignedAt ? new Date(t.assignedAt) : new Date();
-            
-            return {
-              userId: targetUserId,
-              companyName: String(t.company || t.companyName || ""),
-              taskTitle: String(t.task || t.taskTitle || ""),
-              isDone: Boolean(t.isDone),
-              createdAt: timestamp 
-            };
-          })
+          data: assignedTasks.map((t: any) => ({
+            userId: targetUserId,
+            companyName: String(t.company || t.companyName || ""),
+            taskTitle: String(t.task || t.taskTitle || ""),
+            status: t.status || (t.isDone ? "COMPLETED" : "ASSIGNED"),
+            isDone: Boolean(t.isDone),
+            managerComment: t.managerComment || null,
+            commentHistory: t.commentHistory || [], 
+            createdAt: t.assignedAt ? new Date(t.assignedAt) : new Date() 
+          }))
         })
       ]);
     } 
-    // If Employee is marking tasks as done from their dashboard
+    // 3. ⭐ EMPLOYEE SYNC LOGIC (Optimized with Transaction)
     else if (!isManager && Array.isArray(assignedTasks)) {
-      await Promise.all(
-        assignedTasks.map((t: any) =>
-          prisma.assignedTask.updateMany({
-            where: { id: t.id, userId: targetUserId },
-            data: { isDone: Boolean(t.isDone) },
-          })
-        )
+      const hasCompletedTask = assignedTasks.some((t: any) => 
+        t.isDone === true || t.status?.toUpperCase() === 'COMPLETED'
       );
+
+      await prisma.$transaction([
+        // Bulk update status for specific task IDs to reduce DB roundtrips
+        ...assignedTasks.map((t: any) =>
+          prisma.assignedTask.update({
+            where: { id: t.id },
+            data: { 
+              isDone: Boolean(t.isDone),
+              status: t.status || (t.isDone ? "COMPLETED" : "ASSIGNED"),
+              updatedAt: new Date()
+            },
+          })
+        ),
+        // Automatically sync checkmark
+        ...(hasCompletedTask ? [
+          prisma.task.update({
+            where: { userId_date: { userId: targetUserId, date: normalizedDate } },
+            data: { isCompleted: true }
+          })
+        ] : [])
+      ]);
     }
 
     return NextResponse.json(taskRecord);
@@ -109,6 +118,7 @@ export async function GET(req: NextRequest) {
       endDate = new Date(yearNum, monthNum, 0, 23, 59, 59);
     }
 
+    // Optimization: Selecting only necessary fields to reduce payload size and speed up query
     const usersData = await prisma.user.findMany({
       where: { 
         role: isManager && !filterUserId ? 'EMPLOYEE' : undefined,
@@ -121,9 +131,20 @@ export async function GET(req: NextRequest) {
         role: true,
         endDate: true,
         assignedTasks: {
-            where: startDate && endDate ? {
-                createdAt: { gte: startDate, lte: endDate }
-            } : undefined
+          where: startDate && endDate ? {
+            createdAt: { gte: startDate, lte: endDate }
+          } : undefined,
+          select: {
+            id: true,
+            companyName: true,
+            taskTitle: true,
+            status: true,
+            isDone: true,
+            managerComment: true,
+            commentHistory: true,
+            createdAt: true,
+            updatedAt: true
+          }
         },
         leaves: {
           where: startDate && endDate ? {
@@ -131,15 +152,23 @@ export async function GET(req: NextRequest) {
             OR: [
               { startDate: { gte: startDate, lte: endDate } },
               { endDate: { gte: startDate, lte: endDate } },
-              { AND: [{ startDate: { lte: startDate } }, { endDate: { gte: endDate } }] },
             ],
           } : { status: 'APPROVED' },
+          select: { startDate: true, endDate: true, status: true },
           orderBy: { startDate: 'asc' },
         },
         tasks: {
           where: startDate && endDate ? {
             date: { gte: startDate, lte: endDate },
           } : undefined,
+          select: {
+            id: true,
+            date: true,
+            content: true,
+            managerComment: true,
+            status: true,
+            isCompleted: true
+          },
           orderBy: { date: 'asc' },
         },
       },
@@ -147,29 +176,55 @@ export async function GET(req: NextRequest) {
     });
 
     const result = usersData.map((emp) => {
-      const updatedTasks = emp.tasks.map((taskRecord) => {
-        const taskDateKey = new Date(taskRecord.date).toISOString().split('T')[0];
+      const allDateKeys = new Set([
+        ...emp.tasks.map(t => new Date(t.date).toISOString().split('T')[0]),
+        ...emp.assignedTasks.map(at => new Date(at.createdAt).toISOString().split('T')[0])
+      ]);
+
+      const mergedTasks = Array.from(allDateKeys).map(dateKey => {
+        const taskRecord = emp.tasks.find(
+          t => new Date(t.date).toISOString().split('T')[0] === dateKey
+        );
 
         const dailyAssigned = (emp.assignedTasks || [])
-          .filter((at) => new Date(at.createdAt).toISOString().split('T')[0] === taskDateKey)
+          .filter((at) => new Date(at.createdAt).toISOString().split('T')[0] === dateKey)
           .map((at) => ({
             id: at.id,
             company: at.companyName, 
-            task: at.taskTitle,      
+            task: at.taskTitle,
+            status: at.status,
+            managerComment: at.managerComment,
+            commentHistory: at.commentHistory || [], 
             isDone: at.isDone,
-            assignedAt: at.createdAt // Returns the full timestamp to the UI
+            assignedAt: at.createdAt,
+            updatedAt: at.updatedAt 
           }));
 
         return {
-          ...taskRecord,
+          id: taskRecord?.id || null, 
+          userId: emp.id,
+          date: taskRecord?.date || new Date(dateKey), 
+          content: taskRecord?.content || "",
+          managerComment: taskRecord?.managerComment || null,
+          status: taskRecord?.status || 'PRESENT',
+          isCompleted: taskRecord?.isCompleted || false,
           assignedTasks: dailyAssigned, 
         };
       });
 
+      mergedTasks.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
       return {
-        user: { id: emp.id, name: emp.name, email: emp.email, role: emp.role, endDate: emp.endDate },
+        user: { 
+          id: emp.id, 
+          name: emp.name, 
+          email: emp.email, 
+          role: emp.role, 
+          endDate: emp.endDate, 
+          assignedTasks: emp.assignedTasks 
+        },
         leaves: emp.leaves,
-        tasks: updatedTasks,
+        tasks: mergedTasks, 
         assignedTasks: emp.assignedTasks || [], 
       };
     });
