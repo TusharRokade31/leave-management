@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
     }
 
-    if (['HALF', 'EARLY', 'LATE'].includes(type?.toUpperCase()) && !startTime) {
+    if (['HALF', 'LATE'].includes(type?.toUpperCase()) && !startTime) {
       return NextResponse.json({ error: 'Time is required for this leave type' }, { status: 400 });
     }
 
