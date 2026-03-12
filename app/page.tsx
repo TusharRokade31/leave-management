@@ -21,6 +21,8 @@ import { LoginForm } from "@/components/LoginForm";
 import { LeaveFormData } from "@/type/form";
 import EmployeeWorkStatusTable from "@/components/EmployeeWorkStatusTable";
 import { EmployeeCalendar } from "@/components/EmployeeCalendar";
+import TaskManagement from '@/components/TaskManagement';
+import { useTaskManagement } from '@/hooks/useTaskManagement';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -29,6 +31,9 @@ export default function Home() {
   const { currentUser, loading, login, otpLogin, logout } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
+  // NEW: State for toggling between Day and Company view inside Tasks tab
+  const [taskViewMode, setTaskViewMode] = useState<'day' | 'company'>('day');
+
   // Responsive sidebar state - Open by default on Desktop
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
@@ -49,8 +54,12 @@ export default function Home() {
     updateUser,
     companies,
     saveNewCompany,
+    hideCompany,
     refreshData 
   } = useEmployeeWorkStatus(currentUser, currentMonth);
+
+  // NEW: Initialize Task Management Hook using existing employees data
+  const { allTasks, updateStatus } = useTaskManagement(employees, currentUser);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -126,10 +135,8 @@ export default function Home() {
   // ================= HANDLERS =================
   const handleLogout = async () => {
     try {
-      // Clear any pending toasts to prevent them appearing on re-login
       await logout();
       setActiveModal(null);
-      // Use a timeout or trigger before unmount to ensure it doesn't persist to the login state incorrectly
     } catch (error) {
       toast.error("Logout failed");
     }
@@ -200,7 +207,6 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-[#F9F8F8] dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      {/* ToastContainer configuration to prevent duplicates and persistence across login/logout */}
       <ToastContainer 
         position="top-right" 
         autoClose={3000} 
@@ -292,7 +298,6 @@ export default function Home() {
         <section className="flex-1 overflow-y-auto p-4 lg:p-8 bg-[#F9F8F8] dark:bg-slate-950">
           <div className="max-w-7xl mx-auto space-y-6 lg:space-y-8">
             
-            {/* WELCOME CONTAINER: ONLY VISIBLE ON DASHBOARD TAB */}
             {activeTab === 'dashboard' && (
               <div className="flex flex-col sm:flex-row justify-between items-center bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm gap-4 animate-in fade-in duration-500">
                 <div className="min-w-0">
@@ -300,7 +305,6 @@ export default function Home() {
                   <p className="text-slate-500 text-xs sm:text-sm font-bold uppercase tracking-widest mt-1">Viewing Records for <span className="text-indigo-600">{monthLabel}</span></p>
                 </div>
                 
-                {/* MONTH SELECTOR: ONLY FOR EMPLOYEES */}
                 {currentUser.role === "EMPLOYEE" && (
                   <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-1.5 rounded-2xl border border-slate-100 dark:border-slate-800 shrink-0">
                     <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm rounded-xl transition-all active:scale-90"><ChevronLeft size={20} /></button>
@@ -311,7 +315,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* ================= TAB 1: DASHBOARD ================= */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500">
                 <StatsCards stats={leavedashboard.stats} />
@@ -343,38 +346,82 @@ export default function Home() {
               </div>
             )}
 
-            {/* ================= TAB 2: TASKS ================= */}
-            {activeTab === 'tasks' && (
-              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                  <div className="p-4 lg:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 className="font-bold text-base lg:text-lg uppercase tracking-tight italic tracking-tighter">
-                      {currentUser.role === 'MANAGER' ? 'Team Performance Hub' : 'Daily Task Log'}
-                    </h3>
-                    {currentUser.role === 'EMPLOYEE' && (
-                      <button onClick={() => calendarRef.current?.openToday()} className="w-full sm:w-auto px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-black uppercase rounded-lg transition-colors hover:bg-indigo-100 border border-indigo-100 dark:border-indigo-800">Go to Today</button>
-                    )}
-                  </div>
-                  <div className="p-2 lg:p-4 overflow-x-auto min-h-[400px]">
-                     {currentUser.role === 'MANAGER' ? (
-                        workStatusLoading ? <div className="p-12 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest animate-pulse">Aggregating Team Data...</div> : (
-                          <EmployeeWorkStatusTable 
-                            employees={visibleEmployees as any} companies={companies} onSaveNewCompany={saveNewCompany}
-                            currentMonth={currentMonth} onMonthChange={setCurrentMonth} 
-                            onUpdateFeedback={updateTaskFeedback}
-                            onAssignTasks={addAssignedTasks} 
-                            onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
-                          />
-                        )
-                    ) : (
-                      <div className="p-2 lg:p-6 flex justify-center overflow-x-auto"><EmployeeCalendar ref={calendarRef} /></div>
-                    )}
-                  </div>
-                </div>
+{activeTab === 'tasks' && (
+  <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+    
+    <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-2 border border-slate-200 dark:border-slate-800 shadow-sm flex max-w-sm mx-auto sm:mx-0">
+      <button 
+        onClick={() => setTaskViewMode('day')}
+        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all ${
+          taskViewMode === 'day' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+        }`}
+      >
+        <CalendarIcon size={14} /> Day Wise
+      </button>
+      <button 
+        onClick={() => setTaskViewMode('company')}
+        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all ${
+          taskViewMode === 'company' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+        }`}
+      >
+        <LayoutDashboard size={14} /> Company Wise
+      </button>
+    </div>
+
+    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[500px]">
+      <div className="p-4 lg:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h3 className="font-bold text-base lg:text-lg uppercase tracking-tight italic tracking-tighter">
+          {taskViewMode === 'company' ? 'Company Task Matrix' : (currentUser.role === 'MANAGER' ? 'Team Performance Hub' : 'Daily Task Log')}
+        </h3>
+        
+        {currentUser.role === 'EMPLOYEE' && taskViewMode === 'day' && (
+          <button onClick={() => calendarRef.current?.openToday()} className="w-full sm:w-auto px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-black uppercase rounded-lg transition-colors hover:bg-indigo-100 border border-indigo-100 dark:border-indigo-800">
+            Go to Today
+          </button>
+        )}
+      </div>
+
+      <div className="p-2 lg:p-4">
+        {taskViewMode === 'company' ? (
+          <TaskManagement 
+            allTasks={allTasks} 
+            currentUser={currentUser} 
+            onUpdateStatus={updateStatus} 
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            {currentUser.role === 'MANAGER' ? (
+              workStatusLoading ? (
+                <div className="p-12 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest animate-pulse">Aggregating Team Data...</div>
+              ) : (
+                <EmployeeWorkStatusTable 
+                  employees={visibleEmployees as any} 
+                  companies={companies} 
+                  onSaveNewCompany={saveNewCompany}
+                  hideCompany={hideCompany}
+                  currentMonth={currentMonth} 
+                  onMonthChange={setCurrentMonth} 
+                  onUpdateFeedback={updateTaskFeedback}
+                  onAssignTasks={addAssignedTasks} 
+                  onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
+                />
+              )
+            ) : (
+              <div className="p-2 lg:p-6 flex justify-center">
+                <EmployeeCalendar 
+                  ref={calendarRef} 
+                  /* ENHANCEMENT: Pass current user ID to ensure assignments are fetched */
+                  employeeId={Number(currentUser.id)}
+                />
               </div>
             )}
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
-            {/* ================= TAB 3: LEAVES ================= */}
             {activeTab === 'leaves' && (
               <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -410,7 +457,6 @@ export default function Home() {
         </section>
       </main>
 
-      {/* OVERLAYS & MODALS */}
       {activeModal === 'logout' && (
         <LogoutModal onCancel={() => setActiveModal(null)} onConfirm={handleLogout} />
       )}

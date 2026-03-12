@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api/api";
 import { toast } from "react-toastify";
 
@@ -82,6 +82,7 @@ interface UseEmployeeWorkStatusReturn {
   ) => Promise<void>;
   deleteUser: (userId: number) => Promise<void>;
   saveNewCompany: (name: string) => Promise<void>;
+  hideCompany: (name: string) => void; // Logic for soft-delete persistence
   stats: { totalEmployees: number; pendingLeaves: number };
 }
 
@@ -106,8 +107,23 @@ export const useEmployeeWorkStatus = (
   currentDate: Date
 ): UseEmployeeWorkStatusReturn => {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [companies, setCompanies] = useState<string[]>([]);
+  const [allCompanies, setAllCompanies] = useState<string[]>([]);
+  
+  // PERSISTENCE FIX: Load hidden companies from localStorage on initial load
+  const [hiddenCompanies, setHiddenCompanies] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('hidden_companies');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+
   const [loading, setLoading] = useState<boolean>(false);
+
+  // Derived state: Filter out companies that were "soft deleted"
+  const companies = useMemo(() => {
+    return allCompanies.filter(c => !hiddenCompanies.includes(c));
+  }, [allCompanies, hiddenCompanies]);
 
   const stats = useMemo(
     () => ({
@@ -121,11 +137,6 @@ export const useEmployeeWorkStatus = (
     [employees]
   );
 
-  /**
-   * ✅ FETCH LOGIC (Persistence Fix)
-   * This ensures that when you refresh, tasks from the AssignedTask table
-   * are correctly injected into the specific Task days.
-   */
   const fetchEmployeeWorkStatus = useCallback(async () => {
     if (!currentUser || currentUser.role !== "MANAGER") return;
 
@@ -136,7 +147,6 @@ export const useEmployeeWorkStatus = (
       const data = await api.getEmployeeWorkStatus(month, year);
       
       const mergedData = data.map((emp: Employee) => {
-        // Zip top-level assignedTasks into their respective daily task objects
         const nestedTasks = (emp.tasks || []).map((t) => {
           const taskDateKey = new Date(t.date).toISOString().split('T')[0];
           
@@ -175,7 +185,7 @@ export const useEmployeeWorkStatus = (
       const res = await fetch("/api/companies");
       if (!res.ok) return;
       const data = await res.json();
-      setCompanies(data.map((c: any) => c.name));
+      setAllCompanies(data.map((c: any) => c.name));
     } catch {
       toast.error("Failed to load companies");
     }
@@ -195,8 +205,7 @@ export const useEmployeeWorkStatus = (
         });
         if (!res.ok) throw new Error();
         
-        // Update local state immediately so dropdown refreshes instantly
-        setCompanies((prev) => {
+        setAllCompanies((prev) => {
           if (prev.includes(name)) return prev;
           return [...prev, name].sort();
         });
@@ -207,6 +216,16 @@ export const useEmployeeWorkStatus = (
     },
     []
   );
+
+  // PERSISTENCE FIX: Save to localStorage when hiding
+  const hideCompany = useCallback((name: string) => {
+    setHiddenCompanies((prev) => {
+      const updated = [...prev, name];
+      localStorage.setItem('hidden_companies', JSON.stringify(updated));
+      return updated;
+    });
+    toast.info(`${name} removed from list`);
+  }, []);
 
   const addAssignedTasks = useCallback(
     async (
@@ -231,7 +250,6 @@ export const useEmployeeWorkStatus = (
 
         if (res.ok) {
           const data = await res.json();
-          // The data.assignedTasks should be mapped to UI names by the backend
           const incomingTasks = (data.assignedTasks || []).map((at: any) => ({
             ...at,
             company: at.company || at.companyName || "",
@@ -361,7 +379,7 @@ export const useEmployeeWorkStatus = (
   return {
     employees,
     loading,
-    companies,
+    companies, // Filtered list persists
     stats,
     fetchEmployeeWorkStatus,
     refreshData: fetchEmployeeWorkStatus,
@@ -371,5 +389,6 @@ export const useEmployeeWorkStatus = (
     updateUser,
     deleteUser,
     saveNewCompany,
+    hideCompany, // Persists via localStorage
   };
 };
