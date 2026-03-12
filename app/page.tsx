@@ -59,7 +59,7 @@ export default function Home() {
   } = useEmployeeWorkStatus(currentUser, currentMonth);
 
   // NEW: Initialize Task Management Hook using existing employees data
-  const { allTasks, updateStatus } = useTaskManagement(employees, currentUser);
+  const { allTasks, updateStatus, refreshTasks } = useTaskManagement(employees, currentUser);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -101,6 +101,13 @@ export default function Home() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Sync Kanban data when switching to company view
+  useEffect(() => {
+    if (activeTab === 'tasks' && taskViewMode === 'company' && typeof refreshTasks === 'function') {
+      refreshTasks();
+    }
+  }, [activeTab, taskViewMode, refreshTasks]);
 
   // ================= LOGIC & MEMOS =================
   const managerNotifications = useMemo(() => 
@@ -337,7 +344,7 @@ export default function Home() {
                         </>
                       ) : (
                         <button onClick={() => setActiveTab('tasks')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-indigo-100 dark:shadow-none uppercase text-xs tracking-widest">
-                              Open Work Log <ArrowRight size={16} />
+                               Open Work Log <ArrowRight size={16} />
                         </button>
                       )}
                     </div>
@@ -346,81 +353,84 @@ export default function Home() {
               </div>
             )}
 
-{activeTab === 'tasks' && (
-  <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-    
-    <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-2 border border-slate-200 dark:border-slate-800 shadow-sm flex max-w-sm mx-auto sm:mx-0">
-      <button 
-        onClick={() => setTaskViewMode('day')}
-        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all ${
-          taskViewMode === 'day' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-        }`}
-      >
-        <CalendarIcon size={14} /> Day Wise
-      </button>
-      <button 
-        onClick={() => setTaskViewMode('company')}
-        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all ${
-          taskViewMode === 'company' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-        }`}
-      >
-        <LayoutDashboard size={14} /> Company Wise
-      </button>
-    </div>
+            {activeTab === 'tasks' && (
+              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                
+                <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-2 border border-slate-200 dark:border-slate-800 shadow-sm flex max-w-sm mx-auto sm:mx-0">
+                  <button 
+                    onClick={() => setTaskViewMode('day')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all ${
+                      taskViewMode === 'day' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <CalendarIcon size={14} /> Day Wise
+                  </button>
+                  <button 
+                    onClick={() => setTaskViewMode('company')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all ${
+                      taskViewMode === 'company' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <LayoutDashboard size={14} /> Company Wise
+                  </button>
+                </div>
 
-    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[500px]">
-      <div className="p-4 lg:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h3 className="font-bold text-base lg:text-lg uppercase tracking-tight italic tracking-tighter">
-          {taskViewMode === 'company' ? 'Company Task Matrix' : (currentUser.role === 'MANAGER' ? 'Team Performance Hub' : 'Daily Task Log')}
-        </h3>
-        
-        {currentUser.role === 'EMPLOYEE' && taskViewMode === 'day' && (
-          <button onClick={() => calendarRef.current?.openToday()} className="w-full sm:w-auto px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-black uppercase rounded-lg transition-colors hover:bg-indigo-100 border border-indigo-100 dark:border-indigo-800">
-            Go to Today
-          </button>
-        )}
-      </div>
+                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[500px]">
+                  <div className="p-4 lg:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h3 className="font-bold text-base lg:text-lg uppercase tracking-tight italic tracking-tighter">
+                      {taskViewMode === 'company' ? 'Company Task Matrix' : (currentUser.role === 'MANAGER' ? 'Team Performance Hub' : 'Daily Task Log')}
+                    </h3>
+                    
+                    {currentUser.role === 'EMPLOYEE' && taskViewMode === 'day' && (
+                      <button onClick={() => calendarRef.current?.openToday()} className="w-full sm:w-auto px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-black uppercase rounded-lg transition-colors hover:bg-indigo-100 border border-indigo-100 dark:border-indigo-800">
+                        Go to Today
+                      </button>
+                    )}
+                  </div>
 
-      <div className="p-2 lg:p-4">
-        {taskViewMode === 'company' ? (
-          <TaskManagement 
-            allTasks={allTasks} 
-            currentUser={currentUser} 
-            onUpdateStatus={updateStatus} 
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            {currentUser.role === 'MANAGER' ? (
-              workStatusLoading ? (
-                <div className="p-12 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest animate-pulse">Aggregating Team Data...</div>
-              ) : (
-                <EmployeeWorkStatusTable 
-                  employees={visibleEmployees as any} 
-                  companies={companies} 
-                  onSaveNewCompany={saveNewCompany}
-                  hideCompany={hideCompany}
-                  currentMonth={currentMonth} 
-                  onMonthChange={setCurrentMonth} 
-                  onUpdateFeedback={updateTaskFeedback}
-                  onAssignTasks={addAssignedTasks} 
-                  onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
-                />
-              )
-            ) : (
-              <div className="p-2 lg:p-6 flex justify-center">
-                <EmployeeCalendar 
-                  ref={calendarRef} 
-                  /* ENHANCEMENT: Pass current user ID to ensure assignments are fetched */
-                  employeeId={Number(currentUser.id)}
-                />
+                  <div className="p-2 lg:p-4">
+                    {/* ⭐ MOUNT PERSISTENCE LOGIC ⭐ */}
+                    {/* Both views stay in DOM but only one is visible at a time */}
+                    <div className={taskViewMode === 'company' ? "block" : "hidden"}>
+                      <TaskManagement 
+                        allTasks={allTasks} 
+                        currentUser={currentUser} 
+                        onUpdateStatus={updateStatus} 
+                      />
+                    </div>
+
+                    <div className={taskViewMode === 'day' ? "block" : "hidden"}>
+                      <div className="overflow-x-auto">
+                        {currentUser.role === 'MANAGER' ? (
+                          workStatusLoading ? (
+                            <div className="p-12 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest animate-pulse">Aggregating Team Data...</div>
+                          ) : (
+                            <EmployeeWorkStatusTable 
+                              employees={visibleEmployees as any} 
+                              companies={companies} 
+                              onSaveNewCompany={saveNewCompany}
+                              hideCompany={hideCompany}
+                              currentMonth={currentMonth} 
+                              onMonthChange={setCurrentMonth} 
+                              onUpdateFeedback={updateTaskFeedback}
+                              onAssignTasks={addAssignedTasks} 
+                              onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
+                            />
+                          )
+                        ) : (
+                          <div className="p-2 lg:p-6 flex justify-center">
+                            <EmployeeCalendar 
+                              ref={calendarRef} 
+                              employeeId={Number(currentUser.id)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
-        )}
-      </div>
-    </div>
-  </div>
-)}
 
             {activeTab === 'leaves' && (
               <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
