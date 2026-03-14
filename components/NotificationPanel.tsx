@@ -6,7 +6,8 @@ import {
   Bell, 
   X, 
   MessageSquare,
-  Info
+  Sparkles,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { formatDate } from '@/utils/formatDate';
 
@@ -21,6 +22,9 @@ interface Leave {
   type: string;
   days: number;
   status: string;
+  isOptional?: boolean;      // ✅ Added field
+  holidayName?: string | null; // ✅ Added field
+  slot?: string | null;        // ✅ Added for half-day context
   managerComment?: string | null; 
   createdAt: string;
   updatedAt: string;
@@ -43,7 +47,6 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   userRole = 'MANAGER' 
 }) => {
   
-  // Employees see PENDING only. Managers see all passed from parent.
   const filteredRequests = userRole === 'EMPLOYEE' 
     ? recentRequests.filter(leave => leave.status === 'PENDING')
     : recentRequests;
@@ -134,13 +137,24 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                       <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight pt-1 truncate">
                         {userRole === 'MANAGER' ? leave.user?.name : `${leave.type.replace(/_/g, ' ')} Leave`}
                       </h3>
+                      
+                      {/* ✅ Holiday Tracking Badge */}
+                      {leave.holidayName && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <Sparkles size={10} className="text-indigo-500" />
+                          <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter">
+                            {leave.holidayName}
+                          </span>
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-2 mt-2">
                         <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">
                           {formatRequestedTime(leave.createdAt)}
                         </p>
                         {leave.isEdited && (
                           <span className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase whitespace-nowrap">
-                            • Edited
+                            • Revised
                           </span>
                         )}
                       </div>
@@ -158,7 +172,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                   <div className="mb-4 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800/50">
                     <div className="flex items-center gap-2 mb-1">
                       <MessageSquare size={12} className="text-indigo-500" />
-                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Manager Note</span>
+                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Feedback</span>
                     </div>
                     <p className="text-xs text-slate-600 dark:text-slate-300 italic font-medium line-clamp-3">
                       "{leave.managerComment}"
@@ -169,18 +183,29 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Duration</p>
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{leave.days} Day{leave.days !== 1 ? 's' : ''}</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                      {leave.days} Day{leave.days !== 1 ? 's' : ''}
+                      {/* ✅ Show shift info for half days */}
+                      {leave.type === 'HALF' && leave.slot && (
+                        <span className="text-[10px] block opacity-60 font-bold tracking-tighter">
+                          ({leave.slot.replace('_', ' ')})
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Type</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Category</p>
                     <p className="text-xs font-bold text-slate-700 dark:text-slate-200 capitalize">{leave.type.toLowerCase().replace(/_/g, ' ')}</p>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-800">
-                   <p className="text-xs font-black text-slate-800 dark:text-slate-100">
-                      {formatDate(leave.startDate)} <span className="text-slate-300 mx-1">→</span> {formatDate(leave.endDate)}
-                    </p>
+                <div className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                   <div className="flex items-center gap-2">
+                     <CalendarIcon size={12} className="text-slate-400" />
+                     <p className="text-xs font-black text-slate-800 dark:text-slate-100">
+                        {formatDate(leave.startDate)} <span className="text-slate-300 mx-1">→</span> {formatDate(leave.endDate)}
+                     </p>
+                   </div>
                 </div>
               </div>
             ))
@@ -188,7 +213,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
         </div>
 
         <div className="p-6 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 text-center">
-          <p className="text-[9px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.3em]">Summary View</p>
+          <p className="text-[9px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.3em]">Leave Management System</p>
         </div>
       </div>
     </div>

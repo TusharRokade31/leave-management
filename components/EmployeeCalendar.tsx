@@ -4,7 +4,7 @@ import ReactDOM from "react-dom";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { format, isSameDay, isBefore, startOfDay } from "date-fns";
-import { X, Calendar as CalendarIcon, Save, ListTodo, Clock, RefreshCcw, Edit3, MessageSquare, CheckCircle2, Sparkles, Info, AlertCircle } from "lucide-react";
+import { X, Calendar as CalendarIcon, Save, ListTodo, Clock, RefreshCcw, Edit3, MessageSquare, CheckCircle2, Sparkles, Info, AlertCircle, Bookmark } from "lucide-react";
 import { getAuthToken } from "@/lib/api/api";
 import { canEditDate, isFutureDate } from "@/utils/date";
 import { getHoliday } from "@/lib/holidays"; 
@@ -364,7 +364,6 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                               <span className="text-[7px] sm:text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase truncate block w-fit">{t.company}</span>
                               <div className={`text-[10px] sm:text-[11px] mt-1.5 font-bold leading-snug break-words ${t.isDone ? 'line-through text-gray-400' : 'text-gray-700 dark:text-slate-200'}`} dangerouslySetInnerHTML={{ __html: t.task }} />
                               
-                              {/* RESTORED TIMESTAMPS */}
                               <div className="mt-2 text-[8px] font-bold text-slate-400 flex flex-col gap-1 uppercase tracking-widest">
                                 {t.assignedAt && (
                                   <div className="flex items-center gap-1">
@@ -394,26 +393,28 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                       <span className="bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 px-3 py-1 rounded-full text-[8px] font-black uppercase border border-red-200 dark:border-red-800">On Leave</span>
                     )}
                   </div>
+                  
+                  {/* Leave Warning Bar: Show only if on leave */}
+                  {selectedLeave && (
+                    <div className="px-4 sm:px-6 py-3 bg-red-50 dark:bg-red-950/20 border-y border-red-100 dark:border-red-900/40 flex items-center gap-2 animate-in slide-in-from-top-1">
+                      <Bookmark size={12} className="text-red-500" />
+                      <p className="text-[10px] font-bold text-red-700 dark:text-red-300 italic truncate">
+                        Leave Reason: &quot;{selectedLeave.reason}&quot;
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-                    {selectedLeave ? (
-                      <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4">
-                        <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center text-red-500 border border-red-100 dark:border-red-800"><CalendarIcon size={32} /></div>
-                        <div className="space-y-1">
-                          <p className="text-xs font-black uppercase text-red-600 tracking-widest">{selectedLeave.type} Leave Approved</p>
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 italic px-4">&quot;{selectedLeave.reason}&quot;</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <ReactQuill
-                        theme="snow"
-                        value={currentPointers}
-                        onChange={setCurrentPointers}
-                        modules={quillModules}
-                        readOnly={viewOnly || !canEditDate(selectedDate) || isLoggingDisabled}
-                        placeholder={isLoggingDisabled ? "Logging is disabled for this holiday." : "Describe what you worked on today..."}
-                        className="flex-1 flex flex-col overflow-hidden"
-                      />
-                    )}
+                    {/* ReactQuill is now ALWAYS visible */}
+                    <ReactQuill
+                      theme="snow"
+                      value={currentPointers}
+                      onChange={setCurrentPointers}
+                      modules={quillModules}
+                      readOnly={viewOnly || !canEditDate(selectedDate) || isLoggingDisabled}
+                      placeholder={isLoggingDisabled ? "Logging is disabled for this holiday." : "Describe what you worked on today..."}
+                      className="flex-1 flex flex-col overflow-hidden"
+                    />
                   </div>
                 </div>
 
@@ -437,7 +438,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                       {currentComment || "No notes yet..."}
                     </div>
                   </div>
-                  {((!viewOnly && canEditDate(selectedDate)) || viewOnly) && !isLoggingDisabled && !selectedLeave && (
+                  {((!viewOnly && canEditDate(selectedDate)) || viewOnly) && !isLoggingDisabled && (
                     <button 
                       onClick={handleSave} 
                       disabled={isSaving} 
