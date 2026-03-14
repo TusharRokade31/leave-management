@@ -122,8 +122,13 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Placeholder Sync for generic inputs */
+  input::placeholder, 
+  textarea::placeholder {
+    @apply text-muted-foreground opacity-60;
+  }
 }
-
 
 @keyframes fadeIn {
   from {
@@ -139,7 +144,8 @@
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
 }
-/* ================= Final Hollow Ring Calendar (Complete Visibility) ================= */
+
+/* ================= Calendar Tile System ================= */
 
 .calendar-card-container-wide {
   @apply bg-white rounded-[1.5rem] px-8 py-5 border border-zinc-100 shadow-lg;
@@ -154,7 +160,6 @@
   background: transparent !important;
 }
 
-/* --- Grid & Spacing --- */
 .react-calendar__month-view__days {
   display: grid !important;
   grid-template-columns: repeat(7, 1fr);
@@ -163,47 +168,80 @@
 }
 
 .custom-tile {
-  aspect-ratio: 1 / 1; 
+  aspect-ratio: 1 / 1;
   display: flex !important;
   align-items: center;
   justify-content: center;
-  font-weight: 700; 
-  font-size: 0.85rem; 
-  /* Default color for plain dates */
-  color: #3f3f46 !important; 
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #3f3f46 !important;
   background: transparent !important;
-  border-radius: 50% !important; 
+  border-radius: 12px !important;
   position: relative;
+  isolation: isolate;
   transition: all 0.2s ease;
-  height: auto !important; 
+  height: auto !important;
   width: 100% !important;
   padding: 0 !important;
-  border: 1.5px solid transparent !important; 
+  border: none !important;
   outline: none !important;
-  z-index: 10;
 }
 
-/* FIX: Forces plain date numbers to stay dark even when "Active" */
 .custom-tile abbr {
   text-decoration: none !important;
-  color: inherit !important; 
+  color: inherit !important;
   background-color: transparent !important;
-  pointer-events: none; 
+  pointer-events: none;
+  position: relative;
+  z-index: 1;
 }
 
-/* --- Hollow Status Rings --- */
+.custom-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  z-index: -1;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
 .tile-today-focus {
-  border-color: #2563eb !important;
   color: #2563eb !important;
-  border-width: 2.5px !important;
+}
+.tile-today-focus::before {
+  background: #ffffff !important;
+  border: 2px solid #2563eb !important;
+}
+.dark .tile-today-focus {
+  color: #3b82f6 !important;
+}
+.dark .tile-today-focus::before {
+  background: #0f172a !important;
+  border: 2px solid #3b82f6 !important;
 }
 
-.ring-task-inserted { 
-  border-color: #ef4444 !important;
-  color: #ef4444 !important;
+.task-added {
+  color: #ffffff !important;
+}
+.task-added::before {
+  background: #2563eb !important;
 }
 
-/* --- THE FIX: Selection Mask Reset --- */
+.task-missing {
+  color: #ffffff !important;
+}
+.task-missing::before {
+  background: #ef4444 !important;
+}
+
+.tile-today-focus.task-added {
+  color: #ffffff !important;
+}
+.tile-today-focus.task-added::before {
+  background: #2563eb !important;
+  border: 2px solid #1d4ed8 !important;
+}
 
 .react-calendar__tile--active,
 .react-calendar__tile--hasActive,
@@ -214,48 +252,31 @@
   box-shadow: none !important;
 }
 
-/* Ensure text and rings stay sharp even when 'Selected' */
-.react-calendar__tile--active.tile-today-focus,
-.react-calendar__tile:focus.tile-today-focus,
-.react-calendar__tile--active.tile-today-focus abbr {
-  color: #2563eb !important;
-  border-color: #2563eb !important;
+.custom-tile:enabled:hover::before {
+  background: #f1f5f9 !important;
+}
+.task-added:enabled:hover::before {
+  background: #1d4ed8 !important;
+}
+.task-missing:enabled:hover::before {
+  background: #dc2626 !important;
 }
 
-.react-calendar__tile--active.ring-task-inserted,
-.react-calendar__tile:focus.ring-task-inserted,
-.react-calendar__tile--active.ring-task-inserted abbr {
-  color: #ef4444 !important;
-  border-color: #ef4444 !important;
-}
-
-/* Maintain visibility for PLAIN dates when clicked */
-.react-calendar__tile--active.custom-tile:not(.tile-today-focus):not(.ring-task-inserted) abbr {
-  color: #3f3f46 !important;
-}
-
-/* Hover fixes */
-.custom-tile:enabled:hover {
-  background-color: #f8fafc !important;
-}
-
-/* Remove default library 'now' markers */
 .react-calendar__tile--now:after {
   display: none !important;
 }
 
-/* --- Header & Weekdays --- */
 .react-calendar__navigation button {
   font-weight: 800 !important;
   text-transform: uppercase;
-  font-size: 1rem !important; 
+  font-size: 1rem !important;
   color: #18181b;
 }
 
 .react-calendar__month-view__weekdays {
   text-transform: uppercase;
   font-weight: 800;
-  font-size: 0.65rem; 
+  font-size: 0.65rem;
   color: #a1a1aa;
 }
 
@@ -264,38 +285,68 @@
   pointer-events: none;
 }
 
-/* Make quill full flex column */
-  .ql-container {
-    display: flex !important;
-    flex-direction: column;
-    flex: 1 !important;
-    min-height: 0 !important;
-    border: none !important;
-  }
+/* ================= Quill Editor Sync ================= */
 
-  /* Toolbar always visible */
-  .ql-toolbar {
-    flex-shrink: 0 !important;
-    border: none !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    background: #fafafa;
-  }
+.ql-container {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 !important;
+  min-height: 0 !important;
+  border: none !important;
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
 
-  .dark .ql-toolbar {
-    background: #1e293b !important;
-    border-bottom: 1px solid #334155 !important;
-  }
+.ql-toolbar {
+  flex-shrink: 0 !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--background);
+}
 
-  /* THIS enables scrolling */
-  .ql-editor {
-    flex: 1 1 auto;
-    overflow-y: auto !important;
-    min-height: 0 !important;
-    padding: 16px !important;
-    box-sizing: border-box;
-  }
+.dark .ql-toolbar {
+  background: var(--background) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
 
-  /* Remove quill default border */
-  .ql-container.ql-snow {
-    border: none !important;
-  }
+/* Icon & Picker colors for Dark Mode */
+.dark .ql-snow .ql-stroke {
+  stroke: var(--foreground) !important;
+  opacity: 0.7;
+}
+.dark .ql-snow .ql-fill {
+  fill: var(--foreground) !important;
+  opacity: 0.7;
+}
+.dark .ql-snow .ql-picker {
+  color: var(--foreground) !important;
+  opacity: 0.7;
+}
+
+.ql-editor {
+  flex: 1 1 auto;
+  overflow-y: auto !important;
+  min-height: 0 !important;
+  padding: 16px !important;
+  box-sizing: border-box;
+}
+
+/* Placeholder Styling for Quill */
+.ql-editor.ql-blank::before {
+  color: var(--muted-foreground) !important;
+  font-style: normal !important;
+  opacity: 0.6;
+}
+
+.ql-container.ql-snow {
+  border: none !important;
+}
+
+/* Scrollbar styling for Quill */
+.ql-editor::-webkit-scrollbar {
+  width: 4px;
+}
+.ql-editor::-webkit-scrollbar-thumb {
+  background: #6366f1;
+  border-radius: 10px;
+}

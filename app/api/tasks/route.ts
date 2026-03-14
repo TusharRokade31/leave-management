@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const targetUserId = isManager && employeeId ? parseInt(employeeId) : authUser.id;
 
     // 1. Primary Daily Log Record (Upsert)
-    const taskRecord = await prisma.task.upsert({
+    await prisma.task.upsert({
       where: { userId_date: { userId: targetUserId, date: normalizedDate } },
       update: { 
         managerComment: isManager ? managerComment : undefined,
@@ -53,12 +53,13 @@ export async function POST(req: NextRequest) {
             isDone: Boolean(t.isDone),
             managerComment: t.managerComment || null,
             commentHistory: t.commentHistory || [], 
-            createdAt: t.assignedAt ? new Date(t.assignedAt) : new Date() 
+            createdAt: t.assignedAt ? new Date(t.assignedAt) : new Date(),
+            completedAt: t.completedAt ? new Date(t.completedAt) : (t.isDone ? new Date() : null)
           }))
         })
       ]);
     } 
-    // 3. EMPLOYEE SYNC LOGIC
+    // 3. EMPLOYEE SYNC LOGIC & ORIGIN STATUS CAPTURE
     else if (!isManager && Array.isArray(assignedTasks)) {
       const hasCompletedTask = assignedTasks.some((t: any) => 
         t.isDone === true || t.status?.toUpperCase() === 'COMPLETED'
@@ -66,25 +67,47 @@ export async function POST(req: NextRequest) {
 
       const validTasks = assignedTasks.filter(t => t.id);
 
-      await prisma.$transaction([
-        ...validTasks.map((t: any) =>
-          prisma.assignedTask.update({
+      await prisma.$transaction(async (tx) => {
+        for (const t of validTasks) {
+          // ✅ FETCH CURRENT STATE TO CAPTURE PREVIOUS STATUS
+          const currentTask = await tx.assignedTask.findUnique({
             where: { id: t.id },
-            data: { 
-              isDone: Boolean(t.isDone),
-              status: t.status || (t.isDone ? "COMPLETED" : "ASSIGNED"),
-              updatedAt: new Date()
-            },
-          })
-        ),
-        prisma.task.update({
+            select: { status: true, commentHistory: true }
+          });
+
+          // Only update if task exists
+          if (currentTask) {
+            const isTaskDone = Boolean(t.isDone);
+            const newStatus = t.status || (isTaskDone ? "COMPLETED" : "ASSIGNED");
+            
+            await tx.assignedTask.update({
+              where: { id: t.id },
+              data: { 
+                isDone: isTaskDone,
+                status: newStatus,
+                completedAt: isTaskDone ? (t.completedAt ? new Date(t.completedAt) : new Date()) : null,
+                updatedAt: new Date()
+                // Note: History is usually handled by the dedicated status PATCH route,
+                // but we keep the structure consistent here.
+              },
+            });
+          }
+        }
+
+        // Update main daily log completion status
+        await tx.task.update({
           where: { userId_date: { userId: targetUserId, date: normalizedDate } },
           data: { isCompleted: hasCompletedTask }
-        })
-      ]);
+        });
+      });
     }
 
-    return NextResponse.json(taskRecord);
+    const finalRecord = await prisma.task.findUnique({
+      where: { userId_date: { userId: targetUserId, date: normalizedDate } }
+    });
+
+    return NextResponse.json(finalRecord);
+
   } catch (err: any) {
     console.error("Task Save Error:", err);
     return NextResponse.json({ error: 'Failed to save task' }, { status: 500 });
@@ -105,8 +128,6 @@ export async function GET(req: NextRequest) {
     const userIdParam = searchParams.get('userId');
 
     const isManager = decoded.role === 'MANAGER';
-    
-    // ⭐ OPTIMIZATION 1: Target specific user ID early to skip global user scanning
     const filterUserId = userIdParam ? parseInt(userIdParam) : (!isManager ? decoded.id : undefined);
 
     let startDate: Date | undefined;
@@ -117,7 +138,7 @@ export async function GET(req: NextRequest) {
       endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
     }
 
-    // ⭐ OPTIMIZATION 2: If we are looking for a single user (Employee or Specific Review), Query Directly
+    // --- LOGIC FOR SINGLE USER (EMPLOYEE CALENDAR & TASK BOARD) ---
     if (filterUserId) {
       const [tasks, assignedTasks, leaves] = await Promise.all([
         prisma.task.findMany({
@@ -130,7 +151,7 @@ export async function GET(req: NextRequest) {
         }),
         prisma.leave.findMany({
           where: { userId: filterUserId, status: 'APPROVED' },
-          select: { startDate: true, endDate: true }
+          select: { id: true, startDate: true, endDate: true, type: true, status: true, reason: true }
         })
       ]);
 
@@ -139,7 +160,7 @@ export async function GET(req: NextRequest) {
         ...assignedTasks.map(at => at.createdAt.toISOString().split('T')[0])
       ]);
 
-      const result = Array.from(allDateKeys).map(dateKey => {
+      const taskResults = Array.from(allDateKeys).map(dateKey => {
         const taskRecord = tasks.find(t => t.date.toISOString().split('T')[0] === dateKey);
         const dailyAssigned = assignedTasks.filter(at => at.createdAt.toISOString().split('T')[0] === dateKey);
 
@@ -160,16 +181,21 @@ export async function GET(req: NextRequest) {
             commentHistory: at.commentHistory || [],
             isDone: at.isDone,
             assignedAt: at.createdAt,
+            completedAt: at.completedAt,
             updatedAt: at.updatedAt
           })),
         };
       });
 
-      result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      return NextResponse.json(result);
+      taskResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      return NextResponse.json({
+        tasks: taskResults,
+        leaves: leaves
+      });
     }
 
-    // ⭐ OPTIMIZATION 3: Manager Team View - Efficient batch query
+    // --- LOGIC FOR MANAGER OVERVIEW (TEAM BOARD) ---
     const usersData = await prisma.user.findMany({
       where: { role: 'EMPLOYEE' },
       select: {
@@ -188,7 +214,7 @@ export async function GET(req: NextRequest) {
         },
         leaves: {
           where: { status: 'APPROVED' },
-          select: { startDate: true, endDate: true }
+          select: { startDate: true, endDate: true, type: true, status: true, reason: true }
         }
       },
       orderBy: { name: 'asc' },
@@ -213,6 +239,7 @@ export async function GET(req: NextRequest) {
             commentHistory: at.commentHistory || [], 
             isDone: at.isDone,
             assignedAt: at.createdAt,
+            completedAt: at.completedAt,
             updatedAt: at.updatedAt 
           }));
 
@@ -233,8 +260,8 @@ export async function GET(req: NextRequest) {
       return {
         user: { id: emp.id, name: emp.name, email: emp.email, role: emp.role, endDate: emp.endDate },
         leaves: emp.leaves,
-        tasks: mergedTasks, 
-        assignedTasks: emp.assignedTasks || [], 
+        tasks: mergedTasks,
+        assignedTasks: mergedTasks.flatMap(day => day.assignedTasks),
       };
     });
 

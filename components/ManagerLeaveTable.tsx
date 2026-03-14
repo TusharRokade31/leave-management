@@ -15,15 +15,19 @@ import {
   MessageSquare, 
   Send,
   AlertTriangle,
-  Clock 
+  Clock,
+  Sparkles,
+  FileText,
+  Info,
+  RefreshCcw,
+  User
 } from 'lucide-react';
-import { FileText } from 'lucide-react';
 import { getStatusIcon } from '../utils/getStatusIcon';
 import { formatDate } from '@/utils/formatDate';
 import { getStatusColor } from '@/utils/getStatusColors';
 import { toast } from 'react-toastify';
+import { HOLIDAY_DATA } from '@/lib/holidays';
 
-// FIXED: Defined LeaveStatus globally to resolve red lines in the JSX casting
 type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 interface Leave {
@@ -66,6 +70,16 @@ interface EmployeeStats {
   totalDays: number;
 }
 
+const getHolidaysInRange = (start: string, end: string) => {
+  const s = new Date(start.split('T')[0]);
+  const e = new Date(end.split('T')[0]);
+
+  return HOLIDAY_DATA.filter(h => {
+    const hDate = new Date(h.date);
+    return hDate >= s && hDate <= e;
+  });
+};
+
 export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({ 
   leaves, 
   onApprove, 
@@ -78,7 +92,7 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [searchEmployee, setSearchEmployee] = useState('');
   const [employeeStats, setEmployeeStats] = useState<EmployeeStats | null>(null);
-  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [showCommentModal, setShowCommentBox] = useState(false);
   const [currentAction, setCurrentAction] = useState<'approve' | 'reject' | null>(null);
   const [comment, setComment] = useState('');
   const [actionLeaveId, setActionLeaveId] = useState<number | null>(null);
@@ -146,13 +160,13 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
     setActionLeaveId(leaveId);
     setCurrentAction(action);
     setComment(viewModalComment || ''); 
-    setShowCommentModal(true);
+    setShowCommentBox(true);
   };
 
   const handleConfirmAction = async () => {
       if (!actionLeaveId || !currentAction) return;
       if (currentAction === 'reject' && !comment.trim()) {
-        toast('Please provide a comment when rejecting a leave request');
+        toast.warning('Please provide a comment when rejecting a leave request');
         return;
       }
 
@@ -164,7 +178,7 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
         } else {
           await onReject(actionLeaveId, comment.trim());
         }
-        setShowCommentModal(false);
+        setShowCommentBox(false);
         setComment('');
         setActionLeaveId(null);
         setCurrentAction(null);
@@ -272,10 +286,8 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
               <tr>
                 <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Employee</th>
                 <th className="px-6 py-5 text-left text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Dates & Schedule</th>
-                <th className="px-6 py-5 text-left text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Type</th>
+                <th className="px-6 py-5 text-left text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Type & Holiday</th>
                 <th className="px-6 py-5 text-left text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Total Days</th>
-                <th className="px-6 py-5 text-left text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Justification</th>
-                <th className="px-6 py-5 text-left text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Requested</th>
                 <th className="px-6 py-5 text-left text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Status</th>
                 <th className="px-8 py-5 text-right text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 dark:text-slate-50">Management</th>
               </tr>
@@ -291,109 +303,119 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredLeaves.map(leave => (
-                  <tr key={leave.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-800/30 transition-all group">
-                    <td className="px-8 py-5">
-                      <button
-                        onClick={() => {
-                          const stats = getCurrentMonthLeaves(leave.user?.name || '');
-                          setEmployeeStats(stats);
-                          setShowStatsModal(true);
-                        }}
-                        className="text-sm font-black text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-left"
-                      >
-                        {leave.user?.name}
-                        <span className="block text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-tight lowercase">{leave.user?.email}</span>
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="text-slate-900 dark:text-slate-100 font-bold">
-                        {formatDate(leave.startDate)} <span className="text-slate-300 mx-1">→</span> {formatDate(leave.endDate)}
-                      </div>
-                      {formatLeaveTime(leave) && (
-                        <div className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-1 font-black uppercase tracking-tighter flex items-center gap-1">
-                          <Clock size={10} /> {formatLeaveTime(leave)}
+                filteredLeaves.map(leave => {
+                  const holidaysInRange = getHolidaysInRange(leave.startDate, leave.endDate);
+
+                  // ✅ FIXED: Removed non-overlapping type string to solve Build Error
+                  const optionalHoliday = holidaysInRange.find(
+                    h => h.type === "OPTIONAL"
+                  );
+
+                  const fixedHoliday = holidaysInRange.find(h => h.type === 'FIXED');
+                  
+                  return (
+                    <tr key={leave.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-800/30 transition-all group">
+                      <td className="px-8 py-5">
+                        <button
+                          onClick={() => {
+                            const stats = getCurrentMonthLeaves(leave.user?.name || '');
+                            setEmployeeStats(stats);
+                            setShowStatsModal(true);
+                          }}
+                          className="text-sm font-black text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors text-left"
+                        >
+                          {leave.user?.name}
+                          <span className="block text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-tight lowercase">{leave.user?.email}</span>
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="text-slate-900 dark:text-slate-100 font-bold">
+                          {formatDate(leave.startDate)} <span className="text-slate-300 mx-1">→</span> {formatDate(leave.endDate)}
                         </div>
-                      )}
-                      {leave.isEdited && (
-                        <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-500 font-black uppercase italic mt-1 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/30 rounded border border-amber-100 dark:border-amber-800">
-                          <History size={10} /> Revised
+                        {formatLeaveTime(leave) && (
+                          <div className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-1 font-black uppercase tracking-tighter flex items-center gap-1">
+                            <Clock size={10} /> {formatLeaveTime(leave)}
+                          </div>
+                        )}
+                        {leave.isEdited && (
+                          <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-500 font-black uppercase italic mt-1 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/30 rounded border border-amber-100 dark:border-amber-800">
+                            <History size={10} /> Revised
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex flex-col gap-1.5 items-start">
+                          <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/20 px-2.5 py-1 rounded-lg border border-indigo-100 dark:border-indigo-800/30 whitespace-nowrap">
+                            {leave.type.replace('_', ' ')}
+                          </span>
+                          
+                          {optionalHoliday && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-600 text-white rounded-full text-[8px] font-black uppercase shadow-sm">
+                              <Sparkles size={8} /> {optionalHoliday.name}
+                            </span>
+                          )}
+
+                          {fixedHoliday && fixedHoliday.isHalfDay && (
+                             <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[8px] font-black uppercase border border-amber-200">
+                               <Clock size={8} /> {fixedHoliday.name} (Half)
+                             </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 text-sm font-black text-slate-900 dark:text-slate-300 whitespace-nowrap">{leave.days} <span className="text-[10px] font-bold text-slate-400 tracking-tighter uppercase">Days</span></td>
+                      <td className="px-6 py-5">
+                        <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${getStatusColor(leave.status as LeaveStatus)}`}>
+                          {getStatusIcon(leave.status as LeaveStatus)}
+                          <span>{leave.status}</span>
                         </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/20 px-2.5 py-1 rounded-lg border border-indigo-100 dark:border-indigo-800/30 whitespace-nowrap">
-                        {leave.type.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5 text-sm font-black text-slate-900 dark:text-slate-300 whitespace-nowrap">{leave.days} <span className="text-[10px] font-bold text-slate-400 tracking-tighter uppercase">Days</span></td>
-                    <td className="px-6 py-5">
-                      <div className="max-w-[150px]">
-                        <p className="text-xs text-slate-600 dark:text-slate-400 truncate italic tracking-tight">&quot;{leave.reason}&quot;</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-[11px] font-bold text-gray-500 dark:text-slate-400 whitespace-nowrap">
-                      {formatRequestedTime(leave.createdAt)}
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${getStatusColor(leave.status as LeaveStatus)}`}>
-                        {getStatusIcon(leave.status as LeaveStatus)}
-                        <span>{leave.status}</span>
-                      </span>
-                    </td>
-                    <td className="px-8 py-5">
-                        <div className="flex items-center justify-end space-x-2">
-                            <button
-                                onClick={() => {
-                                    setSelectedLeave(leave);
-                                    setViewModalComment(leave.managerComment || '');
-                                }}
-                                className="p-2.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800 rounded-xl transition-all active:scale-90"
-                                title="Full Details"
-                            >
-                                <Eye className="w-4 h-4" />
-                            </button>
-                            {leave.status === 'PENDING' && (
-                                <>
-                                    <button
-                                        onClick={() => handleActionClick(leave.id, 'approve')}
-                                        className="p-2.5 text-green-600 dark:text-green-400 hover:bg-green-600 hover:text-white dark:bg-slate-800 rounded-xl transition-all active:scale-90"
-                                    >
-                                        <CheckCircle className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleActionClick(leave.id, 'reject')}
-                                        className="p-2.5 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white dark:bg-slate-800 rounded-xl transition-all active:scale-90"
-                                    >
-                                        <XCircle className="w-4 h-4" />
-                                    </button>
-                                </>
-                            )}
-                        </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-8 py-5">
+                          <div className="flex items-center justify-end space-x-2">
+                              <button
+                                  onClick={() => {
+                                      setSelectedLeave(leave);
+                                      setViewModalComment(leave.managerComment || '');
+                                  }}
+                                  className="p-2.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-50 dark:bg-slate-800 rounded-xl transition-all active:scale-90"
+                              >
+                                  <Eye className="w-4 h-4" />
+                              </button>
+                              {leave.status === 'PENDING' && (
+                                  <>
+                                      <button
+                                          onClick={() => handleActionClick(leave.id, 'approve')}
+                                          className="p-2.5 text-green-600 dark:text-green-400 hover:bg-green-600 hover:text-white dark:bg-slate-800 rounded-xl transition-all active:scale-90"
+                                      >
+                                          <CheckCircle className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                          onClick={() => handleActionClick(leave.id, 'reject')}
+                                          className="p-2.5 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white dark:bg-slate-800 rounded-xl transition-all active:scale-90"
+                                      >
+                                          <XCircle className="w-4 h-4" />
+                                      </button>
+                                  </>
+                              )}
+                          </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
       
-      {/* ACTION MODAL (APPROVE/REJECT) */}
       {showCommentModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[120] p-4 animate-in fade-in duration-200">
            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 dark:border-slate-800">
             <div className={`${currentAction === 'approve' ? 'bg-green-600' : 'bg-red-600'} text-white px-8 py-6 flex items-center justify-between`}>
-              <h3 className="text-sm font-black uppercase tracking-[0.2em]">
-                {currentAction === 'approve' ? 'Final Confirmation' : 'Rejection Reason'}
-              </h3>
-              <button onClick={() => !isSubmitting && setShowCommentModal(false)} className="text-white hover:rotate-90 transition-all duration-200"><X className="w-5 h-5" /></button>
+              <h3 className="text-sm font-black uppercase tracking-[0.2em]">{currentAction === 'approve' ? 'Final Confirmation' : 'Rejection Reason'}</h3>
+              <button onClick={() => !isSubmitting && setShowCommentBox(false)}><X className="w-5 h-5" /></button>
             </div>
-            
             <div className="px-8 py-8 space-y-4">
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">
-                  Manager Feedback {currentAction === 'reject' && <span className="text-red-500">*</span>}
-                </label>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Manager Feedback {currentAction === 'reject' && <span className="text-red-500">*</span>}</label>
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
@@ -403,14 +425,13 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
                   className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-[1.5rem] focus:ring-2 focus:ring-indigo-500 dark:text-white outline-none transition-all resize-none text-sm font-medium italic"
                 />
             </div>
-
             <div className="px-8 py-6 bg-slate-50 dark:bg-slate-800/50 flex justify-end space-x-3 border-t border-gray-100 dark:border-slate-800">
-              <button onClick={() => setShowCommentModal(false)} className="px-6 py-3 font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all">Cancel</button>
+              <button onClick={() => setShowCommentBox(false)} className="px-6 py-3 font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all">Cancel</button>
               <button
                 onClick={handleConfirmAction}
                 disabled={isSubmitting || (currentAction === 'reject' && !comment.trim())}
                 className={`px-8 py-3 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl transition-all flex items-center space-x-2 shadow-xl active:scale-95 disabled:opacity-50 ${
-                  currentAction === 'approve' ? 'bg-green-600 hover:bg-green-700 shadow-green-100' : 'bg-red-600 hover:bg-red-700 shadow-red-100'
+                  currentAction === 'approve' ? 'bg-green-600' : 'bg-red-600'
                 }`}
               >
                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : currentAction === 'approve' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
@@ -421,106 +442,134 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
         </div>
       )}
 
-      {/* VIEW DETAILS MODAL */}
-{selectedLeave && !showCommentModal && (
-  <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
-      <div className="px-8 py-6 border-b flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white italic">Application Review</h3>
-          <button onClick={() => setSelectedLeave(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400"><X className="w-5 h-5" /></button>
-      </div>
-      
-      <div className="px-8 py-8 space-y-8 overflow-y-auto custom-scrollbar">
-        {selectedLeave.isEdited && selectedLeave.editSummary && (
-          <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-[1.5rem] flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+      {selectedLeave && !showCommentModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
+            <div className="px-8 py-6 border-b flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white italic">Application Review</h3>
+                <button onClick={() => setSelectedLeave(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="px-8 py-8 space-y-8 overflow-y-auto custom-scrollbar">
+              {(() => {
+                const holidaysInRange = getHolidaysInRange(selectedLeave.startDate, selectedLeave.endDate);
+                // ✅ FIXED: Removed non-overlapping type string to solve Build Error
+                const optionalHoliday = holidaysInRange.find(h => h.type === "OPTIONAL");
+                const fixedHoliday = holidaysInRange.find(h => h.type === 'FIXED');
+                
+                if (optionalHoliday) {
+                  return (
+                    <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 rounded-[1.5rem] flex items-center gap-3">
+                      <Sparkles className="w-5 h-5 text-indigo-600" />
+                      <div>
+                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Optional Holiday</p>
+                        <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                            Employee is utilizing Optional Holiday: {optionalHoliday.name} ({formatDate(optionalHoliday.date)})
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                if (fixedHoliday?.isHalfDay) {
+                  return (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-[1.5rem] flex items-center gap-3">
+                      <Info className="w-5 h-5 text-amber-600" />
+                      <div>
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Half-Day Notice</p>
+                        <p className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase">Office is already partially closed due to {fixedHoliday.name}.</p>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return null;
+              })()}
+
+              {selectedLeave.isEdited && selectedLeave.editSummary && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-[1.5rem] flex items-start gap-3">
+                    <RefreshCcw className="w-5 h-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Modification Summary</p>
+                      <p className="text-xs font-bold text-amber-700 dark:text-amber-400 italic">&quot;{selectedLeave.editSummary}&quot;</p>
+                    </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-8">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Duration</label>
+                  <p className="font-bold text-slate-900 dark:text-slate-100 text-lg">{formatDate(selectedLeave.startDate)} <span className="text-slate-300">→</span> {formatDate(selectedLeave.endDate)}</p>
+                  <p className="text-xs font-black text-indigo-600 dark:text-indigo-400 mt-1 uppercase tracking-tighter">{selectedLeave.days} Work Days</p>
+                </div>
+                <div className="text-right">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Category</label>
+                  <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 font-black text-[10px] uppercase rounded-lg border border-indigo-100">{selectedLeave.type.replace('_', ' ')}</span>
+                </div>
+              </div>
+
+              {(selectedLeave.startTime || selectedLeave.type === 'HALF') && (
+                <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-center gap-4">
+                  <div className="p-3 bg-white dark:bg-slate-800 rounded-xl shadow-sm">
+                    <Clock className="w-5 h-5 text-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Shift & Timing Details</label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedLeave.type === 'HALF' && (
+                        <span className="text-xs font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded uppercase">
+                          {selectedLeave.startTime === '10:00' ? '1st Half' : selectedLeave.startTime === '14:00' ? '2nd Half' : 'Custom Half'}
+                        </span>
+                      )}
+                      <p className="text-sm font-black text-slate-700 dark:text-slate-200">
+                        {selectedLeave.startTime || '--:--'} 
+                        <span className="mx-2 text-slate-300 font-normal">to</span> 
+                        {selectedLeave.endTime || '--:--'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Modification Summary</p>
-                <p className="text-xs font-bold text-amber-700 dark:text-amber-400 italic">&quot;{selectedLeave.editSummary}&quot;</p>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Employee Justification</label>
+                <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-[2rem] border border-slate-100 shadow-inner">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed italic">&quot;{selectedLeave.reason}&quot;</p>
+                </div>
               </div>
-          </div>
-        )}
 
-        <div className="grid grid-cols-2 gap-8">
-          <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Duration</label>
-            <p className="font-bold text-slate-900 dark:text-slate-100 text-lg">{formatDate(selectedLeave.startDate)} <span className="text-slate-300">→</span> {formatDate(selectedLeave.endDate)}</p>
-            <p className="text-xs font-black text-indigo-600 dark:text-indigo-400 mt-1 uppercase tracking-tighter">{selectedLeave.days} Work Days</p>
-          </div>
-          <div className="text-right">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Category</label>
-            <span className="inline-block px-3 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-black text-[10px] uppercase rounded-lg border border-indigo-100 dark:border-indigo-800">
-              {selectedLeave.type.replace('_', ' ')}
-            </span>
-          </div>
-        </div>
-
-        {/* --- NEW: DETAILED SHIFT & TIMING SECTION --- */}
-        {(selectedLeave.startTime || selectedLeave.type === 'HALF') && (
-          <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 flex items-center gap-4">
-            <div className="p-3 bg-white dark:bg-slate-800 rounded-xl shadow-sm">
-              <Clock className="w-5 h-5 text-indigo-500" />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Shift & Timing Details</label>
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Show Slot Information (e.g., First Half/Second Half) */}
-                {selectedLeave.type === 'HALF' && (
-                  <span className="text-xs font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded uppercase">
-                    {selectedLeave.startTime === '10:00' ? '1st Half' : selectedLeave.startTime === '14:00' ? '2nd Half' : 'Custom Half'}
-                  </span>
-                )}
-                {/* Show Actual Times */}
-                <p className="text-sm font-black text-slate-700 dark:text-slate-200">
-                  {selectedLeave.startTime || '--:--'} 
-                  <span className="mx-2 text-slate-300 font-normal">to</span> 
-                  {selectedLeave.endTime || '--:--'}
-                </p>
+              <div className="p-6 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-[2rem] border border-indigo-100 space-y-4">
+                <div className="flex items-center gap-2 text-indigo-600">
+                  <MessageSquare size={18} />
+                  <h4 className="text-[10px] font-black uppercase tracking-widest">Management Discussion</h4>
+                </div>
+                <textarea
+                  value={viewModalComment}
+                  onChange={(e) => setViewModalComment(e.target.value)}
+                  placeholder="Notes for the employee..."
+                  className="w-full px-5 py-4 bg-white dark:bg-slate-800 border-none rounded-[1.5rem] focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none text-sm italic font-medium"
+                />
+                <div className="flex justify-end pt-2">
+                    <button
+                      onClick={handleStandaloneCommentSave}
+                      disabled={isSavingComment || viewModalComment === (selectedLeave.managerComment || '')}
+                      className="px-6 py-2.5 bg-slate-900 dark:bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-105 disabled:opacity-50 transition-all flex items-center gap-2"
+                    >
+                      {isSavingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      Update Feedback
+                    </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
 
-        <div>
-          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Employee Justification</label>
-          <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-inner">
-            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed italic">&quot;{selectedLeave.reason}&quot;</p>
+            <div className="px-8 py-6 bg-slate-50 dark:bg-slate-800/50 border-t flex justify-between items-center">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Received: {formatRequestedTime(selectedLeave.createdAt)}</span>
+              <button onClick={() => setSelectedLeave(null)} className="px-10 py-3 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all">Dismiss Review</button>
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="p-6 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-[2rem] border border-indigo-100 dark:border-indigo-900/30 space-y-4">
-          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-            <MessageSquare size={18} />
-            <h4 className="text-[10px] font-black uppercase tracking-widest">Management Discussion</h4>
-          </div>
-          <textarea
-            value={viewModalComment}
-            onChange={(e) => setViewModalComment(e.target.value)}
-            placeholder="Notes for the employee..."
-            className="w-full px-5 py-4 bg-white dark:bg-slate-800 border-none rounded-[1.5rem] focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none text-sm italic font-medium"
-          />
-          <div className="flex justify-end pt-2">
-              <button
-                onClick={handleStandaloneCommentSave}
-                disabled={isSavingComment || viewModalComment === (selectedLeave.managerComment || '')}
-                className="px-6 py-2.5 bg-slate-900 dark:bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-105 disabled:opacity-50 transition-all flex items-center gap-2"
-              >
-                {isSavingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                Update Feedback
-              </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-8 py-6 bg-slate-50 dark:bg-slate-800/50 border-t flex justify-between items-center">
-        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Received: {formatRequestedTime(selectedLeave.createdAt)}</span>
-        <button onClick={() => setSelectedLeave(null)} className="px-10 py-3 bg-slate-900 dark:bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-indigo-100 dark:shadow-none transition-all active:scale-95">Dismiss Review</button>
-      </div>
-    </div>
-  </div>
-)}
-
-      {/* STATS MODAL */}
       {showStatsModal && employeeStats && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in zoom-in-95 duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 dark:border-slate-800">

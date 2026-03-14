@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest) {
     const normalizedStatus = status.toUpperCase();
     const isManager = decoded.role === 'MANAGER';
 
-    // 2. Optimized Fetch: Get only what we need to minimize DB load
+    // 2. Optimized Fetch
     const existingTask = await prisma.assignedTask.findUnique({
       where: { id: Number(assignedTaskId) },
       select: { 
@@ -31,6 +31,7 @@ export async function PATCH(req: NextRequest) {
         createdAt: true,
         commentHistory: true, 
         managerComment: true,
+        status: true, // ✅ Ensure we fetch current status to log as Origin
       }
     });
 
@@ -38,32 +39,36 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    // 3. Prepare primary update payload
+    // 3. Prepare primary update payload 
+    const isTaskDone = normalizedStatus === 'COMPLETED';
     const updateData: any = {
       status: normalizedStatus,
-      isDone: normalizedStatus === 'COMPLETED',
+      isDone: isTaskDone,
+      // Sets time if moving to COMPLETED, clears it if moving back to other states
+      completedAt: isTaskDone ? new Date() : null, 
       updatedAt: new Date(), 
     };
 
     // 4. Feedback Logic (Appends to history)
-    if (isManager && managerComment !== undefined && managerComment.trim() !== "") {
+    if (isManager && managerComment && typeof managerComment === 'string' && managerComment.trim() !== "") {
       const currentHistory = Array.isArray(existingTask.commentHistory) 
         ? existingTask.commentHistory 
         : [];
       
       const newHistoryEntry = {
-        comment: managerComment,
-        status: normalizedStatus,
+        comment: managerComment.trim(),
+        // ✅ ORIGIN FIX: Capture the state BEFORE the update
+        status: existingTask.status, 
         timestamp: new Date().toISOString(),
         author: decoded.name || 'Manager'
       };
 
       updateData.commentHistory = [...currentHistory, newHistoryEntry];
-      updateData.managerComment = managerComment; 
+      updateData.managerComment = managerComment.trim(); 
       updateData.lastCommentedAt = new Date();
     }
 
-    // 5. TRANSACTION: Ensures UI consistency and prevents "vanishing" data
+    // 5. TRANSACTION: Ensures UI consistency
     const result = await prisma.$transaction(async (tx) => {
       // A. Update the specific Kanban task
       const updated = await tx.assignedTask.update({
@@ -71,11 +76,10 @@ export async function PATCH(req: NextRequest) {
         data: updateData,
       });
 
-      // B. WORK STATUS TABLE SYNC:
-      // If task is COMPLETED, instantly check the day log for that user
+      // B. WORK STATUS TABLE SYNC
       if (normalizedStatus === 'COMPLETED') {
         const logDate = new Date(existingTask.createdAt);
-        logDate.setUTCHours(0, 0, 0, 0); // Target UTC midnight for unique constraint
+        logDate.setUTCHours(0, 0, 0, 0); 
 
         await tx.task.upsert({
           where: { 
@@ -97,7 +101,7 @@ export async function PATCH(req: NextRequest) {
 
       return updated;
     }, {
-      timeout: 10000 // Extended timeout to handle slow concurrent requests
+      timeout: 10000 
     });
 
     return NextResponse.json(result);

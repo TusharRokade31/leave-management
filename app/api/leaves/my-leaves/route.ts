@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
       },
     });
 
+
     return NextResponse.json(leaves);
   } catch (err: any) {
     console.error('Get leaves error:', err);
