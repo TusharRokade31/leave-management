@@ -6,7 +6,18 @@ import { sendLeaveNotification } from '@/lib/email';
 export async function POST(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
-    const { startDate, endDate, reason, type, startTime, endTime } = await req.json();
+    const body = await req.json();
+
+    const { 
+      startDate, 
+      endDate, 
+      reason, 
+      type, 
+      startTime, 
+      endTime,
+      isOptional,    
+      holidayName    
+    } = body;
 
     if (!startDate || !endDate || !reason) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
@@ -31,6 +42,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'End date must be after start date' }, { status: 400 });
     }
 
+    // --- OPTIONAL HOLIDAY QUOTA VALIDATION ---
+    if (isOptional) {
+      const currentYear = start.getFullYear();
+      const yearStart = new Date(currentYear, 0, 1);
+      const yearEnd = new Date(currentYear, 11, 31);
+
+      const existingApprovedOptional = await prisma.leave.findFirst({
+        where: {
+          userId: authUser.id,
+          isOptional: true,
+          startDate: { gte: yearStart, lte: yearEnd },
+          status: 'APPROVED'
+        }
+      });
+
+      if (existingApprovedOptional) {
+        return NextResponse.json({ 
+          error: `You have already used your optional holiday quota for ${currentYear}.` 
+        }, { status: 400 });
+      }
+    }
+    // ------------------------------------------
+
     const leave = await prisma.leave.create({
       data: {
         userId: authUser.id,
@@ -43,6 +77,8 @@ export async function POST(req: NextRequest) {
         startTime: startTime || null,
         endTime: endTime || null,
         status: 'PENDING',
+        isOptional: isOptional || false, 
+        holidayName: holidayName || null  
       },
       include: {
         user: {
@@ -56,7 +92,7 @@ export async function POST(req: NextRequest) {
       await sendLeaveNotification({
         mode: 'NEW',
         leave: leave,
-        employeeName: leave.user.name ?? 'Employee', // Fixed red line: added null coalescing
+        employeeName: leave.user.name ?? 'Employee',
         employeeEmail: leave.user.email
       });
     } catch (emailErr) {
@@ -65,7 +101,7 @@ export async function POST(req: NextRequest) {
     // ---------------------------
 
     return NextResponse.json(leave, { status: 201 });
-  } catch (err: unknown) { // Fixed red line: changed 'any' to 'unknown'
+  } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Server error';
     console.error('Create leave error:', err);
     return NextResponse.json({ error: errorMessage }, { status: 500 });
@@ -78,7 +114,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const userIdParam = searchParams.get('userId');
 
-    // Fixed red line: properly typed whereClause instead of any
     const whereClause: { userId?: number } = {};
 
     if (authUser.role === 'MANAGER') {
@@ -92,7 +127,21 @@ export async function GET(req: NextRequest) {
     const leaves = await prisma.leave.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        startDate: true,
+        endDate: true,
+        reason: true,
+        type: true,
+        days: true,
+        status: true,
+        managerComment: true,
+        isOptional: true,
+        holidayName: true,
+        createdAt: true,
+        updatedAt: true,
+        isEdited: true,
+        editSummary: true,
         user: {
           select: {
             id: true,
@@ -101,11 +150,11 @@ export async function GET(req: NextRequest) {
             role: true,
           },
         },
-      },
+      }
     });
 
     return NextResponse.json(leaves);
-  } catch (err: unknown) { // Fixed red line: changed 'any' to 'unknown'
+  } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Server error';
     console.error('Get leaves error:', err);
     return NextResponse.json({ error: errorMessage }, { status: 500 });

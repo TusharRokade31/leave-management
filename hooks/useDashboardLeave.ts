@@ -4,7 +4,6 @@ import { Stats, LeaveFormData } from "@/type/form";
 import { api } from "@/lib/api/api";
 import { toast } from "react-toastify";
 
-// Define the User interface locally to match your updated auth model
 interface User {
   id: number;
   name: string;
@@ -13,7 +12,6 @@ interface User {
   endDate?: string | null;
 }
 
-// Define the Leave interface to ensure internal consistency
 interface Leave {
   id: number;
   userId: number;
@@ -23,13 +21,21 @@ interface Leave {
   type: string;
   days: number;
   reason: string;
+  isOptional?: boolean;      
+  holidayName?: string | null; 
   managerComment?: string | null;
+}
+
+// Extend local Stats to include optional holiday tracking
+interface DashboardStats extends Stats {
+  optionalUsed?: boolean;
+  holidayName?: string;
 }
 
 interface UseLeavesReturn {
   leaves: Leave[];
   loading: boolean;
-  stats: Stats;
+  stats: DashboardStats; 
   fetchLeaves: () => Promise<void>;
   createLeave: (leaveData: LeaveFormData) => Promise<void>;
   updateLeaveStatus: (leaveId: number, status: 'APPROVED' | 'REJECTED') => Promise<void>;
@@ -39,7 +45,7 @@ interface UseLeavesReturn {
 export const useDashboardLeaves = (currentUser: User | null, currentDate: Date): UseLeavesReturn => {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, approved: 0, wfh: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ total: 0, pending: 0, approved: 0, wfh: 0 });
 
   const fetchLeaves = async (): Promise<void> => {
     if (!currentUser) return;
@@ -55,10 +61,24 @@ export const useDashboardLeaves = (currentUser: User | null, currentDate: Date):
       } else {
         fetchedLeaves = await api.getMyLeaves();
       }
-      setLeaves(fetchedLeaves);
       
+      // ✅ Fetch stats which now includes optionalUsed and holidayName from our API update
       const fetchedStats = await api.getStats(month, year);
-      setStats(fetchedStats);
+
+      // We maintain your manual check as a fallback, 
+      // but prioritize the data coming directly from the stats API
+      const optionalHolidayRecord = fetchedLeaves.find(
+        (l) => l.isOptional && l.status !== 'REJECTED'
+      );
+
+      setLeaves(fetchedLeaves);
+      setStats({
+        ...fetchedStats,
+        // ✅ Fix: Use the API value if it exists, otherwise fallback to the manual check
+        optionalUsed: fetchedStats.optionalUsed !== undefined ? fetchedStats.optionalUsed : !!optionalHolidayRecord,
+        holidayName: fetchedStats.holidayName || optionalHolidayRecord?.holidayName || undefined
+      });
+
     } catch (error) {
       console.error('Failed to fetch leaves:', error);
     } finally {
@@ -77,7 +97,8 @@ export const useDashboardLeaves = (currentUser: User | null, currentDate: Date):
       toast.success('Leave request submitted successfully!');
     } catch (error) {
       console.error('Failed to create leave:', error);
-      toast.error('Failed to create leave: ' + (error as Error).message);
+      const errorMessage = (error as any).response?.data?.error || (error as Error).message;
+      toast.error('Failed to create leave: ' + errorMessage);
       throw error;
     }
   };

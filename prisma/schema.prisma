@@ -69,6 +69,8 @@ model Leave {
   endTime          String?
   reason           String      @db.Text
   type             LeaveType   @default(FULL)
+  isOptional      Boolean  @default(false) // ✅ Add this field
+  holidayName     String?  // ✅ Add this to store "Gudi Padwa", etc.
   days             Int
   status           LeaveStatus @default(PENDING)
   managerComment   String?     @db.Text
@@ -127,6 +129,8 @@ model AssignedTask {
   isDone      Boolean  @default(false)
   dueDate     DateTime?
   
+  completedAt     DateTime?
+
   // --- FEEDBACK FIELDS ---
   // Added managerComment to store the feedback text
   managerComment   String?   @db.Text

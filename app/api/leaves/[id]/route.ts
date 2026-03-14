@@ -33,16 +33,6 @@ export async function PATCH(
           include: { user: { select: { id: true, name: true, email: true } } },
         });
 
-        // Trigger notification for comment
-        try {
-          await sendLeaveNotification({
-            mode: 'COMMENT',
-            leave: updatedLeave,
-            employeeName: updatedLeave.user.name ?? 'Employee',
-            employeeEmail: updatedLeave.user.email
-          });
-        } catch (e) { console.error("Comment notification failed", e); }
-
         return NextResponse.json(updatedLeave);
       }
 
@@ -67,16 +57,6 @@ export async function PATCH(
           include: { user: { select: { id: true, name: true, email: true } } },
         });
 
-        // TRIGGER NOTIFICATION: Manager Decision (Approved/Rejected)
-        try {
-          await sendLeaveNotification({
-            mode: status.toUpperCase(), 
-            leave: updatedLeave,
-            employeeName: updatedLeave.user.name ?? 'Employee',
-            employeeEmail: updatedLeave.user.email
-          });
-        } catch (e) { console.error("Decision notification failed", e); }
-
         return NextResponse.json(updatedLeave);
       }
     }
@@ -95,11 +75,35 @@ export async function PATCH(
         }, { status: 403 });
       }
 
+      // ✅ RECALCULATE DAYS LOGIC
+      // We use the new dates from the body if provided, otherwise fall back to existing dates
+      const newStart = body.startDate ? new Date(body.startDate) : existingLeave.startDate;
+      const newEnd = body.endDate ? new Date(body.endDate) : existingLeave.endDate;
+      const leaveType = body.type || existingLeave.type;
+
+      let calculatedDays = 1;
+      
+      // Only calculate difference for multi-day types (FULL or WFH)
+      if (['FULL', 'WORK_FROM_HOME'].includes(leaveType)) {
+        const d1 = new Date(newStart);
+        const d2 = new Date(newEnd);
+        // Normalize to noon to avoid daylight savings/timezone issues
+        d1.setHours(12, 0, 0, 0);
+        d2.setHours(12, 0, 0, 0);
+        
+        const diffTime = Math.abs(d2.getTime() - d1.getTime());
+        calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      } else {
+        // Half-day, Early, Late types are always 1 day (or could be 0.5 depending on your preference)
+        calculatedDays = 1;
+      }
+
       const updatedLeave = await prisma.leave.update({
         where: { id: parseInt(id) },
         data: {
           startDate: body.startDate ? new Date(body.startDate) : undefined,
           endDate: body.endDate ? new Date(body.endDate) : undefined,
+          days: calculatedDays, // ✅ Store the recalculated count
           type: body.type || undefined,
           reason: body.reason || undefined,
           startTime: body.startTime,
@@ -111,17 +115,6 @@ export async function PATCH(
         },
         include: { user: { select: { id: true, name: true, email: true } } },
       });
-
-      // TRIGGER NOTIFICATION: Employee Edit
-      try {
-        await sendLeaveNotification({
-          mode: 'EDIT',
-          leave: updatedLeave,
-          employeeName: updatedLeave.user.name ?? 'Employee',
-          employeeEmail: updatedLeave.user.email,
-          editSummary: body.editSummary || "Updated details"
-        });
-      } catch (e) { console.error("Edit notification failed", e); }
 
       return NextResponse.json(updatedLeave);
     }

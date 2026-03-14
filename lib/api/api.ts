@@ -215,7 +215,7 @@ export const api = {
     }
   },
 
-  getStats: async (month?: number, year?: number): Promise<Stats> => {
+  getStats: async (month?: number, year?: number): Promise<any> => {
     let url = `/api/leaves/stats`;
     if (month && year) {
       url += `?month=${month}&year=${year}`;
@@ -235,6 +235,10 @@ export const api = {
       pending: parseInt(data.pending),
       approved: parseInt(data.approved),
       wfh: parseInt(data.wfh),
+      // ✅ Explicitly passing the new fields from API to the Frontend
+      optionalUsed: data.optionalUsed,
+      holidayName: data.holidayName,
+      optionalHolidayDate: data.optionalHolidayDate, // ✅ Added to track the specific date
     };
   },
 

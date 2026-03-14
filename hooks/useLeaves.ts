@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Stats, LeaveFormData } from "@/type/form";
 import { api } from "@/lib/api/api";
 import { toast } from "react-toastify";
@@ -15,6 +15,8 @@ interface Leave {
   type: string;
   days: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  isOptional?: boolean;      
+  holidayName?: string | null; 
   managerComment?: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -35,17 +37,18 @@ interface UseLeavesReturn {
   deleteLeave: (leaveId: number) => Promise<void>;
 }
 
-export const useLeaves = (currentUser: any): UseLeavesReturn => { // Changed User to any if not imported
+export const useLeaves = (currentUser: any): UseLeavesReturn => { 
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [stats, setStats] = useState<Stats>({ total: 0, pending: 0, approved: 0, wfh: 0 });
 
-  const fetchLeaves = async (): Promise<void> => {
+  // ✅ Wrap in useCallback to prevent unnecessary re-renders in useEffect
+  const fetchLeaves = useCallback(async (): Promise<void> => {
     if (!currentUser) return;
     
     setLoading(true);
     try {
-      // 2. We use 'any' as a bridge to resolve the red line mismatch between the API response and local interface
+      // 2. We use 'any' as a bridge to resolve the red line mismatch
       let fetchedData: any; 
       
       if (currentUser.role === 'MANAGER') {
@@ -66,20 +69,22 @@ export const useLeaves = (currentUser: any): UseLeavesReturn => { // Changed Use
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser]);
 
   useEffect(() => {
     fetchLeaves();
-  }, [currentUser]);
+  }, [fetchLeaves]);
 
   const createLeave = async (leaveData: LeaveFormData): Promise<void> => {
     try {
       await api.createLeave(leaveData);
+      // ✅ Trigger refresh to get new 'days' count and updated list
       await fetchLeaves();
       toast.success('Leave request submitted successfully!');
     } catch (error) {
       console.error('Failed to create leave:', error);
-      toast.error('Failed to create leave: ' + (error as Error).message);
+      const errorMessage = (error as any).response?.data?.error || (error as Error).message;
+      toast.error('Failed to create leave: ' + errorMessage);
       throw error;
     }
   };
@@ -91,6 +96,7 @@ export const useLeaves = (currentUser: any): UseLeavesReturn => { // Changed Use
   ): Promise<void> => {
     try {
       await api.updateLeaveStatus(leaveId, status, comment);
+      // ✅ Refresh ensures the table shows current status and data
       await fetchLeaves();
       toast.success(`Leave ${status.toLowerCase()} successfully!`);
     } catch (error) {
