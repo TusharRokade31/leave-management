@@ -204,25 +204,42 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
       <style jsx global>{`
         .ql-editor * { color: inherit !important; background-color: transparent !important; font-family: inherit !important; }
         .react-calendar { background: transparent; border: none; font-family: inherit; width: 100% !important; }
+        
+        /* Fixed White Hover on Month Selector */
+        .dark .react-calendar__navigation button:enabled:hover,
+        .dark .react-calendar__navigation button:enabled:focus {
+            background-color: #1e293b !important;
+        }
+
         .react-calendar__tile { position: relative !important; aspect-ratio: 1 / 1 !important; border-radius: 12px !important; margin: 4px 0; font-weight: 700; color: #1e293b; display: flex !important; align-items: center !important; justify-content: center !important; overflow: visible !important; background: transparent !important; z-index: 0; }
         .dark .react-calendar__tile { color: #f8fafc; }
         .dark .react-calendar__navigation button { color: #f8fafc !important; }
         .react-calendar__tile abbr { position: relative !important; z-index: 3 !important; pointer-events: none; color: inherit; }
         .react-calendar__tile::before { content: ''; position: absolute; inset: 0; border-radius: 10px; z-index: 1; background: transparent; transition: background 0.15s ease; }
+        
         .tile-today-focus { color: #2563eb !important; }
         .tile-today-focus::before { background: #ffffff !important; border: 2px solid #2563eb !important; border-radius: 10px; }
         .dark .tile-today-focus { color: #3b82f6 !important; }
         .dark .tile-today-focus::before { background: #0f172a !important; border: 2px solid #3b82f6 !important; }
+        
         .task-added { color: #ffffff !important; }
         .task-added::before { background: #2563eb !important; }
+        
         .task-missing { color: #ffffff !important; }
         .task-missing::before { background: #ef4444 !important; }
+        
+        /* Sync Holiday Tiles for Dark Mode */
         .holiday-fixed::before { background: #94a3b8 !important; opacity: 0.4; }
         .holiday-fixed abbr { color: #475569 !important; font-style: italic; }
+        .dark .holiday-fixed abbr { color: #94a3b8 !important; }
+
         .holiday-optional-approved::before { border: 2px dashed #ef4444 !important; background: rgba(239, 68, 68, 0.05) !important; }
         .holiday-optional-approved abbr { color: #ef4444 !important; }
+        
         .holiday-optional::before { border: 1.5px dashed #6366f1 !important; background: rgba(99, 102, 241, 0.05) !important; }
         .holiday-optional abbr { color: #6366f1 !important; }
+        .dark .holiday-optional abbr { color: #818cf8 !important; }
+
         .leave-approved::before { background: #ef4444 !important; }
         .leave-approved { color: #ffffff !important; }
       `}</style>
@@ -305,7 +322,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-lg sm:text-2xl font-black tracking-tight truncate uppercase italic">{format(selectedDate, "EEEE, MMM dd")}</h3>
-                  <p className="text-white/70 text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1">
+                  <p className="text-white/70 text-[10px] sm:text-xs font-black uppercase tracking-widest mt-1">
                     {isOptionalHolidayUsed ? "Used Optional Holiday" : selectedHoliday ? `${selectedHoliday.type} Holiday: ${selectedHoliday.name}` : (selectedLeave ? `Approved Leave: ${selectedLeave.type}` : "Daily Record")}
                   </p>
                 </div>
@@ -330,7 +347,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
               {!isOptionalHolidayUsed && selectedHoliday && (
                 <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in zoom-in-95 ${selectedHoliday.type === 'FIXED' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100' : 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100'}`}>
                   {selectedHoliday.type === 'FIXED' ? <Info className="text-blue-600 w-5 h-5" /> : <Sparkles className="text-indigo-600 w-5 h-5" />}
-                  <p className={`text-[10px] font-black uppercase tracking-tight ${selectedHoliday.type === 'FIXED' ? 'text-blue-900 dark:text-blue-400' : 'text-indigo-900 dark:text-indigo-300'}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${selectedHoliday.type === 'FIXED' ? 'text-blue-900 dark:text-blue-400' : 'text-indigo-900 dark:text-indigo-300'}`}>
                     {selectedHoliday.type === 'FIXED' ? `Fixed Company Holiday: ${selectedHoliday.name}` : `Available Optional Occasion: ${selectedHoliday.name}`}
                   </p>
                 </div>
@@ -364,7 +381,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                               <span className="text-[7px] sm:text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase truncate block w-fit">{t.company}</span>
                               <div className={`text-[10px] sm:text-[11px] mt-1.5 font-bold leading-snug break-words ${t.isDone ? 'line-through text-gray-400' : 'text-gray-700 dark:text-slate-200'}`} dangerouslySetInnerHTML={{ __html: t.task }} />
                               
-                              <div className="mt-2 text-[8px] font-bold text-slate-400 flex flex-col gap-1 uppercase tracking-widest">
+                              <div className="mt-2 text-[8px] font-black text-slate-400 flex flex-col gap-1 uppercase tracking-widest">
                                 {t.assignedAt && (
                                   <div className="flex items-center gap-1">
                                     <Clock size={10} className="text-indigo-400" />
@@ -394,18 +411,16 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                     )}
                   </div>
                   
-                  {/* Leave Warning Bar: Show only if on leave */}
                   {selectedLeave && (
                     <div className="px-4 sm:px-6 py-3 bg-red-50 dark:bg-red-950/20 border-y border-red-100 dark:border-red-900/40 flex items-center gap-2 animate-in slide-in-from-top-1">
                       <Bookmark size={12} className="text-red-500" />
-                      <p className="text-[10px] font-bold text-red-700 dark:text-red-300 italic truncate">
-                        Leave Reason: &quot;{selectedLeave.reason}&quot;
+                      <p className="text-[10px] font-black uppercase tracking-widest text-red-700 dark:text-red-300 italic truncate">
+                        Reason: &quot;{selectedLeave.reason}&quot;
                       </p>
                     </div>
                   )}
 
                   <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-                    {/* ReactQuill is now ALWAYS visible */}
                     <ReactQuill
                       theme="snow"
                       value={currentPointers}
@@ -425,7 +440,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                   </div>
                   <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-amber-100 dark:border-slate-700">
                     <label className="text-[9px] font-black text-amber-700 dark:text-amber-500 uppercase block mb-1">Live Tracking</label>
-                    <p className="text-xs font-bold text-gray-800 dark:text-slate-200">
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">
                       {selectedLeave ? `Approved ${selectedLeave.type}` : (currentPointers && currentPointers !== '<p><br></p>' ? "Logs Received" : "Pending Logs")}
                     </p>
                   </div>
@@ -434,7 +449,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                       <MessageSquare size={14} />
                       <label className="text-[9px] font-black uppercase tracking-widest">Feedback</label>
                     </div>
-                    <div className={`w-full p-4 rounded-2xl border-2 font-medium text-xs ${viewOnly ? "bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900/30 text-orange-900 dark:text-orange-200" : "bg-white dark:bg-slate-800 border-transparent text-gray-500 dark:text-slate-400 italic shadow-sm"}`}>
+                    <div className={`w-full p-4 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] ${viewOnly ? "bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900/30 text-orange-900 dark:text-orange-200" : "bg-white dark:bg-slate-800 border-transparent text-gray-500 dark:text-slate-400 italic shadow-sm dark:shadow-none"}`}>
                       {currentComment || "No notes yet..."}
                     </div>
                   </div>
@@ -442,7 +457,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                     <button 
                       onClick={handleSave} 
                       disabled={isSaving} 
-                      className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-30 ${viewOnly ? "bg-orange-600 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+                      className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl dark:shadow-none flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-30 ${viewOnly ? "bg-orange-600 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
                     >
                       {isSaving ? <RefreshCcw className="animate-spin" size={16}/> : <Save size={16} />} 
                       {isSaving ? "Syncing..." : viewOnly ? "Update Notes" : "Save Log"}

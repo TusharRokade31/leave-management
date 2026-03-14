@@ -19,6 +19,7 @@ interface TableLeave {
   endDate: string;
   startTime?: string | null;
   endTime?: string | null;
+  slot?: string | null; 
   reason: string;
   type: string;
   days: number;
@@ -46,6 +47,16 @@ const getHolidaysInRange = (start: string, end: string) => {
   });
 };
 
+// Helper for 12hr display
+const format12hr = (time?: string | null) => {
+  if (!time) return "";
+  const [h, m] = time.split(':');
+  let hours = parseInt(h);
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  return `${hours}:${m} ${ampm}`;
+};
+
 export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, onDelete, onUpdate }) => {
   const [selectedLeave, setSelectedLeave] = useState<TableLeave | null>(null);
   const [editingLeave, setEditingLeave] = useState<TableLeave | null>(null);
@@ -57,7 +68,8 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
     type: "",
     reason: "",
     startTime: "",
-    endTime: ""
+    endTime: "",
+    slot: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -87,7 +99,8 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
       type: leave.type,
       reason: leave.reason,
       startTime: leave.startTime || "",
-      endTime: leave.endTime || ""
+      endTime: leave.endTime || "",
+      slot: leave.slot || ""
     });
   };
 
@@ -108,10 +121,8 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
       const originalStart = editingLeave.startDate.split('T')[0];
       const originalEnd = editingLeave.endDate.split('T')[0];
       
-      // ✅ 1. CALCULATE NEW DAYS
       const start = new Date(editForm.startDate);
       const end = new Date(editForm.endDate);
-      // Set to noon to avoid DST/timezone shift errors
       start.setHours(12, 0, 0, 0);
       end.setHours(12, 0, 0, 0);
 
@@ -120,10 +131,9 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
         const diffTime = Math.abs(end.getTime() - start.getTime());
         newDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       } else {
-        newDays = 1; // Half-day, Early, Late are always 1 day
+        newDays = 1;
       }
 
-      // 2. Track Changes for Summary
       if (editForm.startDate !== originalStart || editForm.endDate !== originalEnd) changes.push("Dates");
       if (editForm.type !== editingLeave.type) changes.push("Type");
       if (editForm.reason !== editingLeave.reason) changes.push("Reason");
@@ -131,10 +141,9 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
 
       const editSummaryText = changes.length > 0 ? `Changed ${changes.join(', ')}` : "Updated details";
 
-      // 3. Update with the new day count
       await onUpdate(editingLeave.id, {
         ...editForm,
-        days: newDays, // ✅ Pass recalculated days to backend
+        days: newDays,
         status: 'PENDING',
         isEdited: true,
         updatedAt: new Date().toISOString(),
@@ -146,6 +155,16 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSlotChange = (slot: string) => {
+    const times: Record<string, { start: string; end: string }> = {
+      FIRST_HALF: { start: '10:00', end: '14:30' },
+      SECOND_HALF: { start: '14:30', end: '19:00' },
+      CUSTOM: { start: editForm.startTime || '', end: editForm.endTime || '' }
+    };
+    const selected = times[slot];
+    setEditForm(prev => ({ ...prev, slot, startTime: selected.start, endTime: selected.end }));
   };
 
   const editHoliday = useMemo(() => {
@@ -161,6 +180,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
 
   return (
     <>
+      {/* MONTH SELECTOR BAR */}
       <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 p-6 mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl border border-slate-100 dark:border-slate-700/50 transition-colors">
@@ -181,6 +201,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
         </div>
       </div>
 
+      {/* TABLE SECTION */}
       <div className="bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden transition-all duration-300">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -205,11 +226,27 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                       <div className="text-sm font-black text-slate-900 dark:text-slate-100">
                         {formatDate(leave.startDate)} <span className="text-slate-300 mx-1">→</span> {formatDate(leave.endDate)}
                       </div>
-                      {leave.isEdited && (
-                        <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-500 font-black uppercase italic mt-1">
-                          <History size={10} /> Revised
-                        </span>
-                      )}
+                      
+                      {/* INCREASED SIZE FOR TIME LABELS */}
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {leave.isEdited && (
+                          <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-500 font-black uppercase italic">
+                            <History size={10} /> Revised
+                          </span>
+                        )}
+                        
+                        {leave.type === 'HALF' && leave.slot && (
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase border border-indigo-100 dark:border-indigo-800/50">
+                            {leave.slot.replace('_', ' ')} • {format12hr(leave.startTime)}
+                          </span>
+                        )}
+                        
+                        {['EARLY', 'LATE'].includes(leave.type) && (
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase border border-indigo-100 dark:border-indigo-800/50">
+                            Schedule: {format12hr(leave.startTime)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex flex-col gap-1.5 items-start">
@@ -250,6 +287,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
         </div>
       </div>
 
+      {/* VIEW DETAILS MODAL */}
       {selectedLeave && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[130] p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
@@ -269,23 +307,25 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                 </div>
               )}
 
-              {(() => {
-                const holidays = getHolidaysInRange(selectedLeave.startDate, selectedLeave.endDate);
-                const opt = holidays.find(h => h.type === "OPTIONAL");
-                
-                if (opt) {
-                  return (
-                    <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 rounded-[1.5rem] flex items-center gap-3 animate-in slide-in-from-top-2">
-                      <Sparkles className="w-5 h-5 text-indigo-600" />
-                      <div>
-                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Optional Holiday</p>
-                        <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase">Utilizing: {opt.name} ({formatDate(opt.date)})</p>
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
+              {/* Timing & Type Info */}
+              <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg"><Clock size={20} /></div>
+                  <div>
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Schedule Type</p>
+                    <p className="text-sm font-black text-slate-900 dark:text-white uppercase">{selectedLeave.type.replace('_', ' ')}</p>
+                  </div>
+                </div>
+                {selectedLeave.startTime && (
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Timing</p>
+                    <p className="text-sm font-black text-slate-700 dark:text-slate-200">
+                      {format12hr(selectedLeave.startTime)} {selectedLeave.endTime ? ` - ${format12hr(selectedLeave.endTime)}` : ''}
+                    </p>
+                    {selectedLeave.slot && <p className="text-[9px] font-black text-indigo-500 uppercase">{selectedLeave.slot.replace('_', ' ')}</p>}
+                  </div>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 gap-8">
                 <div>
@@ -294,8 +334,8 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                   <p className="text-xs font-black text-indigo-600 dark:text-indigo-400 mt-1 uppercase">{selectedLeave.days} Work Days</p>
                 </div>
                 <div className="text-right">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Category</label>
-                  <span className="inline-block px-3 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-black text-[10px] uppercase rounded-lg border border-indigo-100 dark:border-indigo-800">{selectedLeave.type}</span>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Status</label>
+                  <span className={`inline-block px-3 py-1 font-black text-[10px] uppercase rounded-lg border ${getStatusColor(selectedLeave.status as any)}`}>{selectedLeave.status}</span>
                 </div>
               </div>
 
@@ -319,6 +359,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
         </div>
       )}
 
+      {/* EDIT MODAL */}
       {editingLeave && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[130] p-4 animate-in zoom-in-95 duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
@@ -328,16 +369,6 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
             </div>
             
             <div className="p-8 space-y-6 overflow-y-auto">
-              {editHoliday && (
-                <div className={`p-4 rounded-2xl border flex items-center gap-3 animate-in slide-in-from-top-2 ${editHoliday.type === 'OPTIONAL' ? 'bg-indigo-50 border-indigo-100 dark:bg-indigo-900/20' : 'bg-amber-50 border-amber-100 dark:bg-amber-900/20'}`}>
-                  {editHoliday.type === 'OPTIONAL' ? <Sparkles className="w-5 h-5 text-indigo-600" /> : <Clock className="w-5 h-5 text-amber-600" />}
-                  <div>
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${editHoliday.type === 'OPTIONAL' ? 'text-indigo-600' : 'text-amber-600'}`}>{editHoliday.name} Detected</p>
-                    <p className="text-[10px] font-bold">Modifying this timeframe will re-validate your holiday entitlements.</p>
-                  </div>
-                </div>
-              )}
-
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Start Date</label>
@@ -359,6 +390,36 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                   <option value="WORK_FROM_HOME">WFH</option>
                 </select>
               </div>
+
+              {/* TIMING CONFIGURATION IN EDIT MODAL */}
+              {['HALF', 'EARLY', 'LATE'].includes(editForm.type) && (
+                <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-4 animate-in fade-in zoom-in-95">
+                  <p className="text-[10px] font-black text-indigo-600 uppercase flex items-center gap-2 tracking-widest"><Clock size={14}/> Schedule Configuration</p>
+                  
+                  {editForm.type === 'HALF' ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        {['FIRST_HALF', 'SECOND_HALF', 'CUSTOM'].map(s => (
+                          <button key={s} type="button" onClick={() => handleSlotChange(s)} className={`py-2 rounded-xl text-[10px] font-black uppercase border-2 transition-all ${editForm.slot === s ? 'border-indigo-600 bg-white text-indigo-600 shadow-sm' : 'border-transparent bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                            {s.replace('_', ' ')}
+                          </button>
+                        ))}
+                      </div>
+                      {(editForm.slot === 'CUSTOM' || !editForm.slot) && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <input type="time" value={editForm.startTime} onChange={e => setEditForm(p => ({...p, startTime: e.target.value}))} className="w-full p-3 bg-white dark:bg-slate-700 rounded-xl font-bold" />
+                          <input type="time" value={editForm.endTime} onChange={e => setEditForm(p => ({...p, endTime: e.target.value}))} className="w-full p-3 bg-white dark:bg-slate-700 rounded-xl font-bold" />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase">{editForm.type === 'EARLY' ? 'Leaving At' : 'Arriving At'}</label>
+                      <input type="time" value={editForm.startTime} onChange={e => setEditForm(p => ({...p, startTime: e.target.value}))} className="w-full p-4 bg-white dark:bg-slate-700 rounded-2xl font-bold" />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Justification</label>
