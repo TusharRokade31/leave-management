@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Clock, ChevronRight, Briefcase, Sparkles, X} from 'lucide-react';
+import { Clock, ChevronRight, Briefcase, Sparkles, X, ChevronDown, Calendar } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { LeaveFormData } from '@/type/form';
@@ -11,7 +11,7 @@ import { getHoliday, findOptionalInStates } from '@/lib/holidays';
 interface LeaveFormProps {
   onSubmit: (formData: LeaveFormData) => Promise<void>;
   onCancel: () => void;
-  existingLeaves: any[]; 
+  existingLeaves: any[];
 }
 
 export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existingLeaves }) => {
@@ -28,7 +28,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isOptionalLeave, setIsOptionalLeave] = useState<boolean>(false);
 
-  // ✅ FIX 1: Robust Quota Check
   const hasUsedApprovedOptional = useMemo(() => {
     if (!existingLeaves || !Array.isArray(existingLeaves)) return false;
     const currentYear = new Date().getFullYear();
@@ -38,24 +37,13 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
       if (!rawDate) return false;
       const [y] = rawDate.split('-').map(Number);
       const isThisYear = y === currentYear;
-
-      const isApproved =
-        l.status?.toUpperCase() === 'APPROVED' ||
-        l.status?.toUpperCase() === 'PENDING';
-
+      const isApproved = l.status?.toUpperCase() === 'APPROVED' || l.status?.toUpperCase() === 'PENDING';
       if (!isThisYear || !isApproved) return false;
 
-      const isOptional =
-        l.isOptional === true ||
-        l.type === 'OPTIONAL' ||
-        (typeof l.holidayName === 'string' && l.holidayName.trim() !== '') ||
-        (typeof l.reason === 'string' && l.reason.includes('[OPTIONAL HOLIDAY:'));
-
-      return isOptional;
+      return l.isOptional === true || l.type === 'OPTIONAL' || (typeof l.holidayName === 'string' && l.holidayName.trim() !== '');
     });
   }, [existingLeaves]);
 
-  // ✅ FIX 2: Timezone-Safe Local Date Parsing
   const stringToDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -84,7 +72,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
       handleTypeChange('HALF');
       toast.info(`Note: ${startHoliday.name} is a half-day holiday.`);
     }
-  }, [startHoliday, formData.type]);
+  }, [startHoliday]);
 
   useEffect(() => {
     setIsOptionalLeave(false);
@@ -95,7 +83,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
       ...prev,
       type,
       endDate: ['HALF', 'EARLY', 'LATE'].includes(type) ? prev.startDate : prev.endDate,
-      startTime: '',
+      startTime: type === 'LATE' ? '10:00' : type === 'EARLY' ? '19:00' : '',
       endTime: '',
       slot: ''
     }));
@@ -103,8 +91,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
 
   const handleSlotChange = (slot: NonNullable<LeaveFormData['slot']>) => {
     const times: Record<string, { start: string; end: string }> = {
-      FIRST_HALF: { start: '10:00', end: '14:00' },
-      SECOND_HALF: { start: '14:00', end: '19:00' },
+      FIRST_HALF: { start: '10:00', end: '14:30' },
+      SECOND_HALF: { start: '14:30', end: '19:00' },
       CUSTOM: { start: '', end: '' }
     };
     const selectedTimes = times[slot] || { start: '', end: '' };
@@ -132,12 +120,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     try {
       const submitData = {
         ...finalData,
-        // Keep the isOptional flag and holidayName for database tracking
         isOptional: isOptionalLeave && !hasUsedApprovedOptional,
-        holidayName: isOptionalLeave && detectedOptionalHolidays.length === 1
-          ? detectedOptionalHolidays[0].name
-          : null,
-        // ✅ CHANGED: Just send the raw reason without the holiday prefix
+        holidayName: isOptionalLeave && detectedOptionalHolidays.length === 1 ? detectedOptionalHolidays[0].name : null,
         reason: finalData.reason
       };
       await onSubmit(submitData as LeaveFormData);
@@ -149,143 +133,182 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     }
   };
 
-  const inputBase = "w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-2xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none";
+  const inputBase = "w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-600 rounded-2xl px-4 py-4 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all outline-none appearance-none font-bold text-base shadow-none dark:shadow-none";
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-0">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/50 dark:shadow-none">
+    <div className="max-w-3xl mx-auto p-4 sm:p-0">
+      <style jsx global>{`
+        /* Kill blue highlight on mobile/chrome */
+        * { -webkit-tap-highlight-color: transparent !important; }
+        .dark input:-webkit-autofill {
+          -webkit-text-fill-color: #f1f5f9;
+          -webkit-box-shadow: 0 0 0px 1000px #1e293b inset;
+        }
+        .react-datepicker-wrapper { width: 100%; }
+        /* Prevent default focus ring overlay */
+        button:focus, select:focus, input:focus { outline: none !important; }
+      `}</style>
+
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] overflow-hidden shadow-sm">
         <div className="px-8 py-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg dark:shadow-none">
               <Briefcase className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Leave Request</h2>
-              <p className="text-xs text-slate-500">Apply for time off or remote work</p>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight uppercase">Leave Request</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Specify your time-off requirements</p>
             </div>
           </div>
-          <button onClick={onCancel} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
-            <X className="w-5 h-5 text-slate-400" />
+          <button onClick={onCancel} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            <X className="w-6 h-6 text-slate-400" />
           </button>
         </div>
 
-        <div className="p-8 space-y-8">
-          {startHoliday?.isHalfDay && (
-            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top-2">
-              <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-tight">{startHoliday.name} (Half Day)</p>
-                <p className="text-[10px] text-amber-700 dark:text-amber-500 font-medium">This date is a half-day holiday. Please select which half you wish to take leave for.</p>
-              </div>
-            </div>
-          )}
-
+        <div className="p-8 space-y-10">
           <section>
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Category</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-1 bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl">
-              {['FULL', 'HALF', 'EARLY', 'LATE', 'WORK_FROM_HOME'].map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => handleTypeChange(t as any)}
-                  className={`px-3 py-2.5 rounded-xl text-[10px] font-bold uppercase transition-all ${
-                    formData.type === t 
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {t.replace(/_/g, ' ')}
-                </button>
-              ))}
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 block">Category</label>
+            <div className="relative group">
+              <select value={formData.type} onChange={(e) => handleTypeChange(e.target.value as any)} className={inputBase}>
+                <option value="FULL">Full Day</option>
+                <option value="HALF">Half Day</option>
+                <option value="EARLY">Early Leave</option>
+                <option value="LATE">Late Coming</option>
+                <option value="WORK_FROM_HOME">Work From Home (WFH)</option>
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-indigo-500 transition-colors">
+                <ChevronDown size={20} />
+              </div>
             </div>
           </section>
 
-          <section className="grid sm:grid-cols-2 gap-6">
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 block">From</label>
+          <section className="flex flex-col sm:flex-row gap-6 w-full">
+            <div className="flex-1 relative">
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">Start Date</label>
               <DatePicker
                 selected={stringToDate(formData.startDate)}
                 onChange={(date) => setFormData(prev => ({ ...prev, startDate: dateToString(date), endDate: ['HALF', 'EARLY', 'LATE'].includes(prev.type) ? dateToString(date) : prev.endDate }))}
                 className={inputBase}
+                placeholderText="Select start date"
                 dateFormat="MMM dd, yyyy"
                 minDate={new Date()}
               />
+              <Calendar className="absolute right-4 top-[48px] text-slate-400 w-5 h-5 pointer-events-none" />
             </div>
             {!['HALF', 'EARLY', 'LATE'].includes(formData.type) && (
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 block">To</label>
+              <div className="flex-1 relative">
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">End Date</label>
                 <DatePicker
                   selected={stringToDate(formData.endDate)}
                   onChange={(date) => setFormData(prev => ({ ...prev, endDate: dateToString(date) }))}
                   className={inputBase}
+                  placeholderText="Select end date"
                   dateFormat="MMM dd, yyyy"
                   minDate={stringToDate(formData.startDate) || new Date()}
                   disabled={!formData.startDate}
                 />
+                <Calendar className="absolute right-4 top-[48px] text-slate-400 w-5 h-5 pointer-events-none" />
               </div>
             )}
           </section>
 
-          {detectedOptionalHolidays.length === 1 && !hasUsedApprovedOptional && (
-            <div className={`p-5 rounded-[2rem] border flex flex-col sm:flex-row gap-4 items-center bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100 animate-in zoom-in-95 transition-all`}>
-              <div className="flex-1 text-center sm:text-left">
-                <div className={`flex items-center gap-2 mb-1 justify-center sm:justify-start text-indigo-600`}>
-                  <Sparkles className="w-4 h-4" />
-                  <span className="text-xs font-black uppercase tracking-widest">Optional Holiday Detected</span>
+          {['HALF', 'EARLY', 'LATE'].includes(formData.type) && (
+            <section className="p-8 bg-slate-50 dark:bg-slate-800/40 rounded-[2rem] border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex items-center gap-3 mb-6 text-indigo-600 dark:text-indigo-400 font-black text-xs uppercase tracking-widest">
+                <Clock size={18} />
+                <span>Applying For</span>
+              </div>
+              
+              {formData.type === 'HALF' ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {[
+                      { id: 'FIRST_HALF', label: '1st Half', time: '10:00 - 02:30' },
+                      { id: 'SECOND_HALF', label: '2nd Half', time: '02:30 - 07:00' },
+                      { id: 'CUSTOM', label: 'Custom', time: 'Manual entry' }
+                    ].map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleSlotChange(s.id as any)}
+                        // ✅ FIX: Removed bg-white from dark mode active state
+                        className={`flex flex-col items-center py-4 rounded-2xl border-2 transition-all ${
+                          formData.slot === s.id 
+                          ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300' 
+                          : 'border-transparent bg-slate-200/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
+                        <span className="text-sm font-black uppercase mb-1">{s.label}</span>
+                        <span className="text-[10px] font-bold opacity-80">{s.time}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {formData.slot === 'CUSTOM' && (
+                    <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2">
+                      <div className="space-y-1 flex-1">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase ml-2">Start Time</span>
+                        <input type="time" value={formData.startTime} onChange={(e) => setFormData(p => ({ ...p, startTime: e.target.value }))} className={inputBase} />
+                      </div>
+                      <div className="space-y-1 flex-1">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase ml-2">End Time</span>
+                        <input type="time" value={formData.endTime} onChange={(e) => setFormData(p => ({ ...p, endTime: e.target.value }))} className={inputBase} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{detectedOptionalHolidays[0].name}</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">
+                    {formData.type === 'EARLY' ? 'Estimated Leaving time' : 'Estimated Arrival time'}
+                  </label>
+                  <input type="time" value={formData.startTime} onChange={(e) => setFormData(p => ({ ...p, startTime: e.target.value }))} className={inputBase} />
+                </div>
+              )}
+            </section>
+          )}
+
+          {detectedOptionalHolidays.length === 1 && !hasUsedApprovedOptional && (
+            <div className="p-6 rounded-[2rem] border-2 border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-900/20 flex flex-col sm:flex-row gap-4 items-center animate-in slide-in-from-bottom-2">
+              <div className="flex-1 text-center sm:text-left">
+                <div className="flex items-center gap-2 mb-1 justify-center sm:justify-start text-indigo-600 dark:text-indigo-400">
+                  <Sparkles className="w-5 h-5" />
+                  <span className="text-xs font-black uppercase tracking-widest">Optional Holiday Recognized</span>
+                </div>
+                <p className="text-base font-black text-slate-800 dark:text-slate-100">{detectedOptionalHolidays[0].name}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOptionalLeave(!isOptionalLeave)}
-                className={`px-6 py-2.5 rounded-full text-[10px] font-black uppercase transition-all ${
-                  isOptionalLeave ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50'
+                className={`px-8 py-3 rounded-full text-[11px] font-black uppercase transition-all ${
+                  isOptionalLeave 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700'
                 }`}
               >
-                {isOptionalLeave ? '✓ Holiday Selected' : 'Use Optional Leave'}
+                {isOptionalLeave ? '✓ Holiday Applied' : 'Use Holiday Quota'}
               </button>
             </div>
           )}
 
-          {formData.type === 'HALF' && (
-            <section className="animate-in fade-in zoom-in-95">
-              <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 block">Shift Selection</label>
-              <div className="grid grid-cols-2 gap-3">
-                {['FIRST_HALF', 'SECOND_HALF'].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => handleSlotChange(s as any)}
-                    className={`py-3 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${
-                      formData.slot === s ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400 dark:border-slate-800'
-                    }`}
-                  >
-                    {s.replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
           <section>
-            <label className="text-[11px] font-bold text-slate-400 uppercase mb-2 block">Reason</label>
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-3 block">Justification</label>
             <textarea
               value={formData.reason}
               onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))}
-              className={`${inputBase} min-h-[120px] resize-none pt-4`}
-              placeholder="Provide a brief explanation..."
+              className={`${inputBase} min-h-[140px] resize-none pt-5 italic leading-relaxed`}
+              placeholder="Please provide a brief reason for your leave request..."
             />
           </section>
 
-          <div className="flex items-center gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <button onClick={onCancel} className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Cancel</button>
+          <div className="flex items-center gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+            <button onClick={onCancel} className="px-8 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-slate-200 transition-colors">Cancel</button>
             <button
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 active:scale-95"
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-3 shadow-none dark:shadow-none disabled:opacity-50"
             >
-              {isSubmitting ? 'Processing...' : 'Submit Request'}
-              <ChevronRight className="w-4 h-4" />
+              {isSubmitting ? 'Processing Submission...' : 'Submit Application'}
+              {!isSubmitting && <ChevronRight className="w-4 h-4" />}
             </button>
           </div>
         </div>

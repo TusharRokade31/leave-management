@@ -162,8 +162,6 @@ export default function Home() {
       
       toast.success("Updated successfully!");
 
-      // ✅ REFRESH ALL DATA SOURCES
-      // Re-fetches the updated 'days' count from the database
       if (leaveHooks.fetchLeaves) await leaveHooks.fetchLeaves();
       if (leavedashboard.fetchLeaves) await leavedashboard.fetchLeaves(); 
       if (refreshData) await refreshData();
@@ -227,7 +225,7 @@ export default function Home() {
     if(window.innerWidth < 1024) setIsSidebarOpen(false);
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 font-bold">Loading...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 font-black uppercase tracking-widest text-xs">Loading...</div>;
   if (!currentUser) return <LoginForm onLogin={login} onOTPLogin={otpLogin} />;
 
   return (
@@ -258,7 +256,7 @@ export default function Home() {
           
           {currentUser.role === "MANAGER" && (
             <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
-              <p className={`text-[10px] font-bold text-slate-400 mb-2 px-2 uppercase tracking-widest ${!isSidebarOpen && "hidden"}`}>Admin Access</p>
+              <p className={`text-[10px] font-black text-slate-400 mb-2 px-2 uppercase tracking-widest ${!isSidebarOpen && "hidden"}`}>Admin Access</p>
               <NavItem icon={<Users size={20}/>} label="User Mgmt" isOpen={isSidebarOpen} onClick={() => { setActiveModal('userManagement'); }} />
               <NavItem icon={<Upload size={20}/>} label="Bulk Upload" isOpen={isSidebarOpen} onClick={() => { setActiveModal('bulkUpload'); }} />
             </div>
@@ -268,11 +266,11 @@ export default function Home() {
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="flex items-center gap-3 w-full p-2.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
             {isDarkMode ? <Sun size={20} className="text-amber-500" /> : <Moon size={20} />}
-            {isSidebarOpen && <span className="text-xs font-black uppercase tracking-widest">Theme</span>}
+            {isSidebarOpen && <span className="text-[10px] font-black uppercase tracking-widest">Theme</span>}
           </button>
           <button onClick={() => setActiveModal('logout')} className="flex items-center gap-3 w-full p-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors">
             <LogOut size={20} />
-            {isSidebarOpen && <span className="text-xs font-black uppercase tracking-widest">Logout</span>}
+            {isSidebarOpen && <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>}
           </button>
         </div>
       </aside>
@@ -281,14 +279,14 @@ export default function Home() {
         <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-4 lg:px-8 shrink-0 z-40">
           <div className="flex items-center gap-2 min-w-0">
             <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg shrink-0"><Menu size={20} /></button>
-            <h1 className="font-black text-sm lg:text-base uppercase tracking-widest truncate">{activeTab}</h1>
+            <h1 className="font-black text-[10px] lg:text-xs uppercase tracking-widest truncate">{activeTab}</h1>
           </div>
           <div className="flex items-center gap-4 shrink-0">
             <button onClick={() => setShowNotifications(true)} className="relative p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
               <Bell size={20} />
-              {activeNotificationCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-[10px] text-white flex items-center justify-center rounded-full font-bold">{activeNotificationCount}</span>}
+              {activeNotificationCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-[10px] text-white flex items-center justify-center rounded-full font-black uppercase">{activeNotificationCount}</span>}
             </button>
-            <div className="h-9 w-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-xs font-black uppercase shadow-lg shadow-indigo-200 dark:shadow-none">{currentUser.name.charAt(0)}</div>
+            <div className="h-9 w-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black uppercase shadow-lg shadow-indigo-200 dark:shadow-none">{currentUser.name.charAt(0)}</div>
           </div>
         </header>
 
@@ -296,15 +294,15 @@ export default function Home() {
           <div className="max-w-7xl mx-auto space-y-6 lg:space-y-8">
             
             {activeTab === 'dashboard' && (
-              <div className="flex flex-col sm:flex-row justify-between items-center bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm gap-4 animate-in fade-in duration-500">
+              <div className="flex flex-col sm:flex-row justify-between items-center bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none gap-4 animate-in fade-in duration-500">
                 <div className="min-w-0">
                   <h2 className="text-2xl lg:text-3xl font-black tracking-tighter uppercase italic text-slate-800 dark:text-white">Hi, {currentUser.name.split(' ')[0]}!</h2>
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Reviewing: <span className="text-indigo-600">{monthLabel}</span></p>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Reviewing: <span className="text-indigo-600">{monthLabel}</span></p>
                 </div>
                 {currentUser.role === "EMPLOYEE" && (
                   <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800">
                     <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all active:scale-90"><ChevronLeft size={18} /></button>
-                    <div className="px-4 py-1 font-black text-[10px] uppercase tracking-tighter text-indigo-600 min-w-[120px] text-center">{monthLabel}</div>
+                    <div className="px-4 py-1 font-black text-[10px] uppercase tracking-widest text-indigo-600 min-w-[120px] text-center">{monthLabel}</div>
                     <button onClick={() => changeMonth(1)} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all active:scale-90"><ChevronRight size={18} /></button>
                   </div>
                 )}
@@ -317,8 +315,8 @@ export default function Home() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
                   
                   {currentUser.role === "EMPLOYEE" && taskStats && (
-                    <div className="bg-white dark:bg-slate-900 p-6 lg:p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
-                      <h3 className="text-xs font-black uppercase tracking-[0.2em] mb-8 flex items-center gap-3 text-slate-400 dark:text-slate-500">
+                    <div className="bg-white dark:bg-slate-900 p-6 lg:p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none transition-all hover:shadow-md dark:hover:shadow-none">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest mb-8 flex items-center gap-3 text-slate-400 dark:text-slate-500">
                         <Trello size={18} className="text-indigo-600" /> Pipeline Stats
                       </h3>
                       <div className="grid grid-cols-3 gap-4">
@@ -332,8 +330,8 @@ export default function Home() {
                     </div>
                   )}
 
-                  <div className="bg-white dark:bg-slate-900 p-6 lg:p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] mb-8 flex items-center gap-3 text-slate-400 dark:text-slate-500">
+                  <div className="bg-white dark:bg-slate-900 p-6 lg:p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none transition-all hover:shadow-md dark:hover:shadow-none">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest mb-8 flex items-center gap-3 text-slate-400 dark:text-slate-500">
                       <LayoutDashboard size={18} className="text-indigo-600" /> Essential Actions
                     </h3>
                     <div className="grid grid-cols-1 gap-4">
@@ -369,42 +367,86 @@ export default function Home() {
               </div>
             )}
 
-            {activeTab === 'tasks' && (
-              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-2 border border-slate-200 dark:border-slate-800 shadow-sm flex max-w-sm mx-auto sm:mx-0">
-                  <button onClick={() => setTaskViewMode('day')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${taskViewMode === 'day' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><CalendarIcon size={14} /> Day Wise</button>
-                  <button onClick={() => setTaskViewMode('company')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${taskViewMode === 'company' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}><LayoutDashboard size={14} /> Company Wise</button>
-                </div>
+           {activeTab === 'tasks' && (
+  <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+    {/* VIEW MODE TOGGLE */}
+    <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-2 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none flex max-w-sm mx-auto sm:mx-0">
+      <button 
+        onClick={() => setTaskViewMode('day')} 
+        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${taskViewMode === 'day' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+      >
+        <CalendarIcon size={14} /> Day Wise
+      </button>
+      <button 
+        onClick={() => setTaskViewMode('company')} 
+        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${taskViewMode === 'company' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+      >
+        <LayoutDashboard size={14} /> Company Wise
+      </button>
+    </div>
 
-                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[500px]">
-                  <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 className="font-black text-sm lg:text-base uppercase tracking-[0.2em] italic underline decoration-indigo-500 decoration-4 underline-offset-8">
-                      {taskViewMode === 'company' ? 'Project Matrix' : (currentUser.role === 'MANAGER' ? 'Team Control' : 'Task Records')}
-                    </h3>
-                    {currentUser.role === 'EMPLOYEE' && taskViewMode === 'day' && (
-                      <button onClick={() => calendarRef.current?.openToday()} className="w-full sm:w-auto px-6 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-black uppercase rounded-xl transition-all hover:bg-indigo-100 border border-indigo-200">Today</button>
-                    )}
-                  </div>
-                  <div className="p-4 lg:p-6">
-                    <div className={taskViewMode === 'company' ? "block" : "hidden"}><TaskManagement allTasks={allTasks} currentUser={currentUser} onUpdateStatus={updateStatus} /></div>
-                    <div className={taskViewMode === 'day' ? "block" : "hidden"}>
-                      {currentUser.role === 'MANAGER' ? (
-                        workStatusLoading ? <div className="p-12 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Syncing Team Data...</div> :
-                        <EmployeeWorkStatusTable employees={visibleEmployees as any} companies={companies} onSaveNewCompany={saveNewCompany} hideCompany={hideCompany} currentMonth={currentMonth} onMonthChange={setCurrentMonth} onUpdateFeedback={updateTaskFeedback} onAssignTasks={addAssignedTasks} onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} />
-                      ) : <div className="p-2 flex justify-center"><EmployeeCalendar ref={calendarRef} employeeId={Number(currentUser.id)} /></div>}
-                    </div>
-                  </div>
-                </div>
+    {/* MAIN CONTENT CONTAINER */}
+    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none overflow-hidden min-h-[500px]">
+      
+      {/* HEADER: ONLY VISIBLE FOR EMPLOYEE IN DAY VIEW */}
+      {currentUser.role === 'EMPLOYEE' && taskViewMode === 'day' && (
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h3 className="font-black text-[10px] lg:text-xs uppercase tracking-widest italic underline decoration-indigo-500 decoration-4 underline-offset-8">
+            Task Records
+          </h3>
+          
+          <button 
+            onClick={() => calendarRef.current?.openToday()} 
+            className="w-full sm:w-auto px-6 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 dark:shadow-none"
+          >
+            Today
+          </button>
+        </div>
+      )}
+
+      {/* RENDERED CONTENT */}
+      <div className="p-4 lg:p-6">
+        <div className={taskViewMode === 'company' ? "block" : "hidden"}>
+          <TaskManagement allTasks={allTasks} currentUser={currentUser} onUpdateStatus={updateStatus} />
+        </div>
+        
+        <div className={taskViewMode === 'day' ? "block" : "hidden"}>
+          {currentUser.role === 'MANAGER' ? (
+            workStatusLoading ? (
+              <div className="p-12 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">
+                Syncing Team Data...
               </div>
-            )}
+            ) : (
+              <EmployeeWorkStatusTable 
+                employees={visibleEmployees as any} 
+                companies={companies} 
+                onSaveNewCompany={saveNewCompany} 
+                hideCompany={hideCompany} 
+                currentMonth={currentMonth} 
+                onMonthChange={setCurrentMonth} 
+                onUpdateFeedback={updateTaskFeedback} 
+                onAssignTasks={addAssignedTasks} 
+                onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
+              />
+            )
+          ) : (
+            <div className="p-2 flex justify-center">
+              <EmployeeCalendar ref={calendarRef} employeeId={Number(currentUser.id)} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
             {activeTab === 'leaves' && (
               <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none overflow-hidden">
                     <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <h3 className="font-black text-sm lg:text-base uppercase tracking-[0.2em]">Leave Center</h3>
+                      <h3 className="font-black text-[10px] lg:text-xs uppercase tracking-widest">Leave Center</h3>
                       {currentUser.role === "EMPLOYEE" && (
-                        <button onClick={() => setShowLeaveForm(!showLeaveForm)} className={`w-full sm:w-auto px-8 py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-lg active:scale-95 ${showLeaveForm ? "bg-red-500 text-white" : "bg-indigo-600 text-white"}`}>
+                        <button onClick={() => setShowLeaveForm(!showLeaveForm)} className={`w-full sm:w-auto px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg dark:shadow-none active:scale-95 ${showLeaveForm ? "bg-red-500 text-white" : "bg-indigo-600 text-white"}`}>
                           {showLeaveForm ? "Close Form" : "Request Leave"}
                         </button>
                       )}
@@ -453,17 +495,17 @@ export default function Home() {
 
 function NavItem({ icon, label, active = false, isOpen = true, onClick }: any) {
   return (
-    <button onClick={onClick} className={`flex items-center gap-3 w-full p-3.5 rounded-2xl transition-all group shrink-0 ${active ? "bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 shadow-sm" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"} ${!isOpen ? "justify-center" : "justify-start"}`}>
+    <button onClick={onClick} className={`flex items-center gap-3 w-full p-3.5 rounded-2xl transition-all group shrink-0 ${active ? "bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 shadow-sm dark:shadow-none" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"} ${!isOpen ? "justify-center" : "justify-start"}`}>
       <span className={`${active ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600"}`}>{icon}</span>
-      {isOpen && <span className="text-[10px] font-black uppercase tracking-[0.1em] truncate">{label}</span>}
+      {isOpen && <span className="text-[10px] font-black uppercase tracking-widest truncate">{label}</span>}
     </button>
   );
 }
 
 function TaskOverviewCard({ label, count, icon, color, bg, onClick }: any) {
   return (
-    <button onClick={onClick} className={`flex flex-col items-center justify-center p-5 rounded-[1.5rem] border-2 transition-all hover:border-indigo-400 hover:scale-[1.02] active:scale-95 ${bg}`}>
-      <div className={`mb-3 p-2 rounded-lg bg-white dark:bg-slate-900 shadow-sm ${color}`}>{icon}</div>
+    <button onClick={onClick} className={`flex flex-col items-center justify-center p-5 rounded-[1.5rem] border-2 transition-all hover:border-indigo-400 dark:hover:border-indigo-600 hover:scale-[1.02] active:scale-95 ${bg}`}>
+      <div className={`mb-3 p-2 rounded-lg bg-white dark:bg-slate-900 shadow-sm dark:shadow-none ${color}`}>{icon}</div>
       <span className="text-xl font-black mb-1 leading-none text-slate-900 dark:text-white">{count}</span>
       <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{label}</span>
     </button>
@@ -473,13 +515,13 @@ function TaskOverviewCard({ label, count, icon, color, bg, onClick }: any) {
 function LogoutModal({ onCancel, onConfirm }: any) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 w-full max-sm rounded-[2.5rem] p-8 border border-slate-200 dark:border-slate-800 shadow-2xl text-center animate-in zoom-in-95">
+      <div className="bg-white dark:bg-slate-900 w-full max-sm rounded-[2.5rem] p-8 border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-none text-center animate-in zoom-in-95">
         <div className="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6"><AlertTriangle size={32} /></div>
-        <h3 className="text-xl font-black uppercase tracking-tighter mb-2 text-slate-800 dark:text-white">End Session?</h3>
-        <p className="text-slate-500 text-sm mb-8 font-medium">Are you sure you want to sign out of the AlphaBeta portal?</p>
+        <h3 className="text-xl font-black uppercase tracking-widest mb-2 text-slate-800 dark:text-white">End Session?</h3>
+        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-8">Are you sure you want to sign out of the AlphaBeta portal?</p>
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-600 dark:text-slate-300">Wait, No</button>
-          <button onClick={onConfirm} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">Sign Out</button>
+          <button onClick={onConfirm} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg dark:shadow-none active:scale-95 transition-all">Sign Out</button>
         </div>
       </div>
     </div>

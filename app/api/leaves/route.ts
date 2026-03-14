@@ -136,6 +136,8 @@ export async function GET(req: NextRequest) {
         days: true,
         status: true,
         managerComment: true,
+        startTime: true,   // ← ADD THIS
+        endTime: true,     // ← ADD THIS
         isOptional: true,
         holidayName: true,
         createdAt: true,
