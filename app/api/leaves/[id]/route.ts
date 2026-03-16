@@ -75,26 +75,21 @@ export async function PATCH(
         }, { status: 403 });
       }
 
-      // ✅ RECALCULATE DAYS LOGIC
-      // We use the new dates from the body if provided, otherwise fall back to existing dates
       const newStart = body.startDate ? new Date(body.startDate) : existingLeave.startDate;
       const newEnd = body.endDate ? new Date(body.endDate) : existingLeave.endDate;
       const leaveType = body.type || existingLeave.type;
 
       let calculatedDays = 1;
       
-      // Only calculate difference for multi-day types (FULL or WFH)
       if (['FULL', 'WORK_FROM_HOME'].includes(leaveType)) {
         const d1 = new Date(newStart);
         const d2 = new Date(newEnd);
-        // Normalize to noon to avoid daylight savings/timezone issues
         d1.setHours(12, 0, 0, 0);
         d2.setHours(12, 0, 0, 0);
         
         const diffTime = Math.abs(d2.getTime() - d1.getTime());
         calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       } else {
-        // Half-day, Early, Late types are always 1 day (or could be 0.5 depending on your preference)
         calculatedDays = 1;
       }
 
@@ -103,7 +98,7 @@ export async function PATCH(
         data: {
           startDate: body.startDate ? new Date(body.startDate) : undefined,
           endDate: body.endDate ? new Date(body.endDate) : undefined,
-          days: calculatedDays, // ✅ Store the recalculated count
+          days: calculatedDays,
           type: body.type || undefined,
           reason: body.reason || undefined,
           startTime: body.startTime,
@@ -112,6 +107,11 @@ export async function PATCH(
           isEdited: true,
           editSummary: body.editSummary || "Updated details",
           updatedAt: new Date(),
+          // ✅ FIX: Do NOT touch isOptional or holidayName during employee edits.
+          // These are set at creation time only. Omitting them here means Prisma
+          // will leave the existing DB values untouched — preserving OH quota usage
+          // for employees who legitimately used it, and not accidentally setting it
+          // for employees who didn't.
         },
         include: { user: { select: { id: true, name: true, email: true } } },
       });

@@ -449,7 +449,7 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
       </div>
 
       {/* ── MOBILE CARD VIEW ── */}
-      <div className="md:hidden space-y-4">
+      <div className="md:hidden space-y-2.5">
         {filteredLeaves.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-gray-100 dark:border-slate-800 px-6 py-16 flex flex-col items-center">
             <FileText className="w-10 h-10 text-slate-200 dark:text-slate-700 mb-3" />
@@ -462,110 +462,78 @@ export const ManagerLeaveTable: React.FC<ManagerLeaveTableProps> = ({
               ? holidaysInRange.find(h => h.type === 'OPTIONAL') : null;
             const fixedHoliday = holidaysInRange.find(h => h.type === 'FIXED');
             const shiftDetails = getShiftDetails(leave);
+            const isSameDay = leave.startDate.slice(0, 10) === leave.endDate.slice(0, 10);
 
             return (
-              <div key={leave.id} className="bg-white dark:bg-slate-900 rounded-[1.75rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div
+                key={leave.id}
+                onClick={() => { setSelectedLeave(leave); setViewModalComment(leave.managerComment || ''); }}
+                className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800/60 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3 px-3.5 py-3">
 
-                {/* Header */}
-                <div className="px-5 pt-5 pb-4 flex items-start justify-between gap-3">
-                  <button
-                    onClick={() => { setEmployeeStats(getCurrentMonthLeaves(leave.user?.name || '')); setShowStatsModal(true); }}
-                    className="flex-1 text-left"
-                  >
-                    <p className="text-sm font-black text-slate-900 dark:text-slate-100 hover:text-indigo-600 transition-colors">{leave.user?.name}</p>
-                    <p className="text-[10px] text-slate-400 font-medium lowercase truncate">{leave.user?.email}</p>
-                  </button>
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase ring-1 ring-inset shrink-0 ${getStatusColor(leave.status as LeaveStatus)}`}>
-                    {getStatusIcon(leave.status as LeaveStatus)}
-                    <span>{leave.status}</span>
-                  </span>
-                </div>
-
-                {/* Banners */}
-                {leave.isEdited && (
-                  <div className="mx-5 mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-xl flex items-center gap-2">
-                    <History size={11} className="text-amber-600 shrink-0" />
-                    <p className="text-[9px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-400 italic">
-                      Revised{leave.editSummary ? `: "${leave.editSummary}"` : ''}
-                    </p>
-                  </div>
-                )}
-                {appliedOptionalHoliday && (
-                  <div className="mx-5 mb-3 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-xl flex items-center gap-2">
-                    <Sparkles size={11} className="text-indigo-600 shrink-0" />
-                    <p className="text-[9px] font-black uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-                      Optional Holiday: {appliedOptionalHoliday.name}
-                    </p>
-                  </div>
-                )}
-                {fixedHoliday?.isHalfDay && (
-                  <div className="mx-5 mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-xl flex items-center gap-2">
-                    <Clock size={11} className="text-amber-600 shrink-0" />
-                    <p className="text-[9px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                      {fixedHoliday.name} (Half-Day Holiday)
-                    </p>
-                  </div>
-                )}
-
-                {/* Body */}
-                <div className="px-5 pb-4 space-y-3">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Dates</p>
-                    <p className="text-sm font-black text-slate-800 dark:text-slate-100">
-                      {formatDate(leave.startDate)} <span className="text-slate-300">→</span> {formatDate(leave.endDate)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-start gap-6">
-                    <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Type</p>
-                      <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-lg border border-indigo-100 dark:border-indigo-800/30">
+                  {/* Left content */}
+                  <div className="flex-1 min-w-0">
+                    {/* Row 1: employee name + status */}
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                      <p className="text-xs font-black text-slate-900 dark:text-slate-100 truncate">{leave.user?.name}</p>
+                      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase ring-1 ring-inset flex-shrink-0 ${getStatusColor(leave.status as LeaveStatus)}`}>
+                        {getStatusIcon(leave.status as LeaveStatus)}
+                        <span>{leave.status}</span>
+                      </span>
+                      <span className="text-[8px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800/30 flex-shrink-0">
                         {leave.type.replace('_', ' ')}
                       </span>
+                      {leave.isEdited && (
+                        <span className="inline-flex items-center gap-0.5 text-[7px] text-amber-600 font-black uppercase bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-md border border-amber-200 dark:border-amber-800 flex-shrink-0">
+                          <History size={7} /> Rev
+                        </span>
+                      )}
+                      {appliedOptionalHoliday && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-600 text-white rounded-full text-[7px] font-black uppercase flex-shrink-0">
+                          <Sparkles size={7} /> {appliedOptionalHoliday.name}
+                        </span>
+                      )}
                     </div>
-                    <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Days</p>
-                      <p className="text-sm font-black text-slate-900 dark:text-slate-200">
-                        {leave.days} <span className="text-[10px] font-bold text-slate-400 uppercase">days</span>
+
+                    {/* Row 2: dates + days + shift */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[11px] font-black text-slate-700 dark:text-slate-200">
+                        {formatDate(leave.startDate)}
+                        {!isSameDay && <><span className="text-slate-300 mx-1">→</span>{formatDate(leave.endDate)}</>}
                       </p>
+                      <span className="text-[9px] font-bold text-slate-400 flex-shrink-0">· {leave.days} {leave.days === 1 ? 'day' : 'days'}</span>
+                      {shiftDetails && (
+                        <span className="text-[8px] font-bold text-slate-400 flex-shrink-0">{shiftDetails.time}</span>
+                      )}
                     </div>
                   </div>
 
-                  {shiftDetails && (
-                    <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Schedule</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <ShiftPill leave={leave} label={shiftDetails.label} />
-                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{shiftDetails.time}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="px-5 py-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => { setSelectedLeave(leave); setViewModalComment(leave.managerComment || ''); }}
-                    className="flex items-center gap-1.5 text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-2 rounded-xl border border-indigo-100 dark:border-indigo-800/30 transition-all active:scale-95"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Review
-                  </button>
-                  {leave.status === 'PENDING' && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleActionClick(leave.id, 'approve')}
-                        className="flex items-center gap-1.5 text-[10px] font-black uppercase text-white bg-green-600 px-3 py-2 rounded-xl transition-all active:scale-95"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" /> Approve
-                      </button>
-                      <button
-                        onClick={() => handleActionClick(leave.id, 'reject')}
-                        className="flex items-center gap-1.5 text-[10px] font-black uppercase text-white bg-red-600 px-3 py-2 rounded-xl transition-all active:scale-95"
-                      >
-                        <XCircle className="w-3.5 h-3.5" /> Reject
-                      </button>
-                    </div>
-                  )}
+                  {/* Right: action buttons — stop propagation */}
+                  <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => { setSelectedLeave(leave); setViewModalComment(leave.managerComment || ''); }}
+                      className="w-8 h-8 flex items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg transition-all active:scale-90"
+                    >
+                      <Eye size={14} />
+                    </button>
+                    {leave.status === 'PENDING' && (
+                      <>
+                        <button
+                          onClick={() => handleActionClick(leave.id, 'approve')}
+                          className="w-8 h-8 flex items-center justify-center text-green-600 bg-green-50 dark:bg-green-900/20 rounded-lg transition-all active:scale-90"
+                        >
+                          <CheckCircle size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleActionClick(leave.id, 'reject')}
+                          className="w-8 h-8 flex items-center justify-center text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg transition-all active:scale-90"
+                        >
+                          <XCircle size={14} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             );

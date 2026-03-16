@@ -81,8 +81,8 @@ interface EmployeeWorkStatusTableProps {
   currentMonth: Date;
   onMonthChange: (date: Date) => void;
   onUpdateFeedback: (date: string, employeeId: number, comment: string, assignedTasks?: AssignedTask[]) => Promise<boolean>;
-  onAssignTasks: (date: string, employeeId: number, assignedTasks: AssignedTask[]) => Promise<boolean>;
   onUpdateDayLeaveStatus?: (leaveId: number, targetDate: string, newType: string, newStatus: string, comment: string) => Promise<boolean>;
+  onAssignTasks: (date: string, employeeId: number, assignedTasks: AssignedTask[]) => Promise<boolean>;
 }
 
 const DEFAULT_COMPANIES = ['Internal Project', 'SCT | Oil & Gas', 'Client Alpha'];
@@ -99,8 +99,8 @@ const hasContent = (task?: Task) =>
   task && task.content && task.content.trim() !== '' && task.content !== '<p><br></p>';
 
 const buildStatus = (task?: Task, leave?: Leave, isWeekend?: boolean, holiday?: any) => {
-  const isApprovedOH = holiday?.type === 'OPTIONAL' && leave?.status === 'APPROVED' && 
-                       (leave?.isOptional === true || leave?.type === 'OPTIONAL' || (typeof leave?.holidayName === 'string' && leave?.holidayName.trim() !== ''));
+  // STRICT SYNC: Only show OH used if the DB flag is true
+  const isApprovedOH = holiday?.type === 'OPTIONAL' && leave?.status === 'APPROVED' && leave?.isOptional === true;
 
   if (isApprovedOH) return `Optional Holiday Used: ${holiday.name}`;
   if (holiday?.type === 'FIXED') return `Public Holiday: ${holiday.name}`;
@@ -167,11 +167,8 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
       return dateKey >= start && dateKey <= end;
     }) || [];
 
-    const leave = allMatchingLeaves.find(l => 
-      l.isOptional === true || 
-      l.type === 'OPTIONAL' || 
-      (typeof l.holidayName === 'string' && l.holidayName.trim() !== '')
-    ) || allMatchingLeaves[0];
+    // STRICT SYNC: Find leaf where isOptional is true, else take the first one
+    const leave = allMatchingLeaves.find(l => l.isOptional === true) || allMatchingLeaves[0];
 
     const holiday = getHoliday(dateKey);
     return { task, leave, dateKey, holiday };
@@ -182,8 +179,8 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
       return { symbol: 'H', color: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300', header: 'bg-red-600' };
     }
     
-    const isApprovedOH = holiday?.type === 'OPTIONAL' && leave?.status === 'APPROVED' && 
-                         (leave?.isOptional === true || leave?.type === 'OPTIONAL' || (typeof leave?.holidayName === 'string' && leave?.holidayName.trim() !== ''));
+    // STRICT SYNC: Only show OH symbol if DB confirms it is optional holiday
+    const isApprovedOH = holiday?.type === 'OPTIONAL' && leave?.status === 'APPROVED' && leave?.isOptional === true;
 
     if (isApprovedOH) {
        return { symbol: 'OH', color: 'bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200', header: 'bg-red-600' };
@@ -263,7 +260,6 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
               <p className="text-indigo-200 text-[10px] sm:text-xs font-bold tracking-widest uppercase mt-1">Attendance & Tasks</p>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-              {/* Search — visible on all sizes */}
               <div className="relative flex-1 sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 w-4 h-4" />
                 <input 
@@ -274,7 +270,6 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
                   className="w-full bg-indigo-700/50 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-xs font-bold placeholder:text-white/30 outline-none"
                 />
               </div>
-              {/* Month nav */}
               <div className="flex gap-2 bg-indigo-700/50 p-1.5 rounded-2xl border border-white/10 justify-center">
                 <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><ChevronLeft size={18}/></button>
                 <div className="px-3 sm:px-6 py-2 font-black text-[10px] sm:text-xs bg-white text-indigo-600 rounded-xl shadow-lg flex items-center uppercase whitespace-nowrap">{monthName}</div>
@@ -322,7 +317,6 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
           <div className="sm:hidden p-3 space-y-4">
             {filteredEmployees?.map((employee) => (
               <div key={employee.user.id} className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
-                {/* Employee header */}
                 <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700">
                   <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black text-xs border border-indigo-200 dark:border-indigo-800 shrink-0">
                     {employee.user.name.charAt(0)}
@@ -332,9 +326,7 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">#{employee.user.id}</p>
                   </div>
                 </div>
-                {/* Day grid */}
                 <div className="p-3">
-                  {/* Weekday header row */}
                   <div className="grid grid-cols-7 gap-0.5 mb-1">
                     {['S','M','T','W','T','F','S'].map((d, i) => (
                       <div key={i} className="text-center text-[7px] font-black text-slate-400 uppercase">{d}</div>
@@ -367,7 +359,6 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
           <div className="flex flex-wrap gap-x-3 sm:gap-x-6 gap-y-2 sm:gap-y-4 justify-center items-center">
             <LegendItem color="bg-green-100 text-green-600" label="Task Done" symbol="T✓" />
             <LegendItem color="bg-red-100 text-red-600" label="Holiday" symbol="H" />
-            {/* ✅ OH added */}
             <LegendItem color="bg-red-100 text-red-600 border border-red-200" label="Opt. Holiday" symbol="OH" />
             <LegendItem color="bg-red-100 text-red-600" label="Full Leave" symbol="FL" />
             <LegendItem color="bg-amber-100 text-amber-600" label="Half Day" symbol="HL" />
@@ -375,7 +366,6 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
             <LegendItem color="bg-violet-100 text-violet-600" label="Early" symbol="EL" />
             <LegendItem color="bg-pink-100 text-pink-600" label="Late" symbol="LT" />
             <LegendItem color="bg-red-50 text-red-400" label="Weekend" symbol="W" />
-            {/* Pending ring indicator */}
             <div className="flex items-center gap-1.5">
               <div className="w-7 h-7 sm:w-8 sm:h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center text-[8px] sm:text-[10px] font-black border border-black/5 ring-2 ring-amber-400 ring-inset flex-shrink-0">FL</div>
               <span className="text-[9px] sm:text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">Pending</span>
@@ -431,11 +421,10 @@ const DayDetailModal: React.FC<{
   const [newTaskContent, setNewTaskContent] = useState('');
   const [isAddingCompany, setIsAddingCompany] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState('');
-  // Mobile tab for the three panels
   const [activeTab, setActiveTab] = useState<'tasks' | 'submission' | 'action'>('action');
 
-  const isOptionalHolidayUsed = detail.holiday?.type === 'OPTIONAL' && detail.leave?.status === 'APPROVED' && 
-                                (detail.leave?.isOptional === true || detail.leave?.type === 'OPTIONAL' || (typeof detail.leave?.holidayName === 'string' && detail.leave?.holidayName.trim() !== ''));
+  // STRICT SYNC: Strictly check boolean flag
+  const isOptionalHolidayUsed = detail.holiday?.type === 'OPTIONAL' && detail.leave?.status === 'APPROVED' && detail.leave?.isOptional === true;
 
   const quillModules = {
     toolbar: [['bold', 'italic'], [{ list: 'bullet' }]],
@@ -485,7 +474,6 @@ const DayDetailModal: React.FC<{
     }
   };
 
-  // Shared tasks list JSX (used in both desktop and mobile)
   const tasksListJSX = (
     <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-indigo-200 dark:scrollbar-thumb-slate-700">
       {assignedTasks.map((item, idx) => {
@@ -621,7 +609,6 @@ const DayDetailModal: React.FC<{
           </div>
         )}
 
-        {/* ── MOBILE TABS ── */}
         <div className="sm:hidden flex gap-1 mx-4 mt-4 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 flex-shrink-0">
           {(['tasks', 'submission', 'action'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
@@ -631,17 +618,13 @@ const DayDetailModal: React.FC<{
           ))}
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          {/* Desktop: 3-col grid */}
           <div className="hidden sm:grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 p-4 sm:p-8">
-            {/* Tasks panel */}
             <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 sm:h-[560px]">
               <div className="flex items-center gap-3 flex-shrink-0"><ListTodo className="w-5 h-5 text-indigo-600" /><h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Assign Tasks</h3></div>
               {tasksFormJSX}
               {tasksListJSX}
             </div>
-            {/* Submission panel */}
             <div className="bg-gray-50 dark:bg-slate-800/30 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-gray-100 dark:border-slate-800 flex flex-col h-auto sm:h-[560px]">
               <h3 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Employee Submission</h3>
               <div className="bg-white/50 dark:bg-slate-900/50 p-5 rounded-2xl flex-1 overflow-y-auto border border-slate-100 dark:border-slate-700">
@@ -652,7 +635,6 @@ const DayDetailModal: React.FC<{
                 )}
               </div>
             </div>
-            {/* Action panel */}
             <div className="bg-amber-50/50 dark:bg-amber-950/10 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-amber-100 dark:border-amber-900/30 flex flex-col space-y-4 h-auto sm:h-[560px]">
               <div className="flex items-center gap-2 text-amber-800 dark:text-amber-500"><Edit3 size={18} /><h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest">Manager Action</h3></div>
               <div className="space-y-4 flex-1">
@@ -696,7 +678,6 @@ const DayDetailModal: React.FC<{
             </div>
           </div>
 
-          {/* Mobile: tab panels */}
           <div className="sm:hidden p-4">
             {activeTab === 'tasks' && (
               <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-2xl p-4 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 min-h-[400px]">

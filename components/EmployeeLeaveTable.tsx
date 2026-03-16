@@ -32,7 +32,7 @@ interface TableLeave {
   isEdited?: boolean; 
   editSummary?: string | null; 
   isOptional?: boolean;
-  holidayName?: string | null; // ✅ Added — API may return this instead of isOptional
+  holidayName?: string | null;
 }
 
 interface EmployeeLeaveTableProps {
@@ -50,11 +50,11 @@ const getHolidaysInRange = (start: string, end: string) => {
   });
 };
 
-// ✅ Checks all possible field shapes the API might return for optional holiday leaves
 const isOptionalLeave = (leave: TableLeave): boolean =>
-  leave.isOptional === true ||
-  leave.type === 'OPTIONAL' ||
-  (typeof leave.holidayName === 'string' && leave.holidayName.trim() !== '');
+  // ✅ ONLY check isOptional flag — holidayName alone does NOT mean OH was used.
+  // Old leaves that overlap an optional holiday date may have holidayName set
+  // without the employee having intentionally used their OH quota.
+  leave.isOptional === true;
 
 const format12hr = (time?: string | null) => {
   if (!time) return "";
@@ -87,7 +87,6 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
     const month = currentMonth.getMonth();
     const startOfMonth = new Date(year, month, 1);
     const endOfMonth = new Date(year, month + 1, 0);
-
     return leaves.filter(leave => {
       const leaveStart = new Date(leave.startDate);
       const leaveEnd = new Date(leave.endDate);
@@ -96,8 +95,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
   }, [leaves, currentMonth]);
 
   const changeMonth = (offset: number) => {
-    const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
-    setCurrentMonth(nextMonth);
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1));
   };
 
   const handleEditInit = (leave: TableLeave) => {
@@ -129,32 +127,26 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
       const changes: string[] = [];
       const originalStart = editingLeave.startDate.split('T')[0];
       const originalEnd = editingLeave.endDate.split('T')[0];
-      
       const start = new Date(editForm.startDate);
       const end = new Date(editForm.endDate);
       start.setHours(12, 0, 0, 0);
       end.setHours(12, 0, 0, 0);
-
       let newDays = 1;
       if (['FULL', 'WORK_FROM_HOME'].includes(editForm.type)) {
         const diffTime = Math.abs(end.getTime() - start.getTime());
         newDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       }
-
       if (editForm.startDate !== originalStart || editForm.endDate !== originalEnd) changes.push("Dates");
       if (editForm.type !== editingLeave.type) changes.push("Type");
       if (editForm.reason !== editingLeave.reason) changes.push("Reason");
       if (editForm.startTime !== (editingLeave.startTime || "")) changes.push("Timing");
-
-      const editSummaryText = changes.length > 0 ? `Changed ${changes.join(', ')}` : "Updated details";
-
       await onUpdate(editingLeave.id, {
         ...editForm,
         days: newDays,
         status: 'PENDING',
         isEdited: true,
         updatedAt: new Date().toISOString(),
-        editSummary: editSummaryText
+        editSummary: changes.length > 0 ? `Changed ${changes.join(', ')}` : "Updated details"
       });
       setEditingLeave(null);
     } catch (error) {
@@ -205,66 +197,94 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
       </div>
 
       <div className="w-full">
-        {/* Mobile View (Card Style) */}
-        <div className="grid grid-cols-1 gap-4 md:hidden">
+
+        {/* ── Mobile: compact single-row cards ── */}
+        <div className="grid grid-cols-1 gap-2.5 md:hidden">
           {filteredLeaves.map(leave => {
             const holidaysInRange = getHolidaysInRange(leave.startDate, leave.endDate);
             const fixedHoliday = holidaysInRange.find(h => h.type === 'FIXED');
-            // ✅ Uses broadened isOptionalLeave helper
             const appliedOptionalHoliday = isOptionalLeave(leave)
               ? holidaysInRange.find(h => h.type === "OPTIONAL") : null;
+            const isSameDay = leave.startDate.slice(0, 10) === leave.endDate.slice(0, 10);
 
             return (
-              <div key={leave.id} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-1">
-                    <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ring-1 ring-inset ${getStatusColor(leave.status as any)}`}>
-                      {getStatusIcon(leave.status as any)}
-                      <span>{leave.status}</span>
-                    </span>
-                    <div className="text-xs font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                      {formatDate(leave.startDate)} <ArrowRight size={10} className="text-slate-300" /> {formatDate(leave.endDate)}
+              <div
+                key={leave.id}
+                onClick={() => setSelectedLeave(leave)}
+                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm active:bg-slate-50 dark:active:bg-slate-800/60 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3 px-3.5 py-3">
+
+                  {/* Left content */}
+                  <div className="flex-1 min-w-0">
+                    {/* Row 1: status + type + revised */}
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase ring-1 ring-inset ${getStatusColor(leave.status as any)}`}>
+                        {getStatusIcon(leave.status as any)}
+                        <span>{leave.status}</span>
+                      </span>
+                      <span className="text-[8px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800/30">
+                        {leave.type.replace('_', ' ')}
+                      </span>
+                      {leave.isEdited && (
+                        <span className="inline-flex items-center gap-0.5 text-[7px] text-amber-600 font-black uppercase bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">
+                          <History size={7} /> Rev
+                        </span>
+                      )}
+                      {appliedOptionalHoliday && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-600 text-white rounded-full text-[7px] font-black uppercase">
+                          <Sparkles size={7} /> {appliedOptionalHoliday.name}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Row 2: dates + days */}
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-black text-slate-800 dark:text-slate-100">
+                        {formatDate(leave.startDate)}
+                        {!isSameDay && <><span className="text-slate-300 mx-1">→</span>{formatDate(leave.endDate)}</>}
+                      </p>
+                      <span className="text-[9px] font-bold text-slate-400 flex-shrink-0">
+                        · {leave.days} {leave.days === 1 ? 'day' : 'days'}
+                      </span>
+                      {(leave.type === 'HALF' || ['EARLY', 'LATE'].includes(leave.type)) && leave.startTime && (
+                        <span className="text-[8px] font-bold text-slate-400 flex-shrink-0">{format12hr(leave.startTime)}</span>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right">
-                     <p className="text-xs font-black text-slate-900 dark:text-slate-300">{leave.days} <span className="text-[9px] text-slate-400">DAYS</span></p>
-                  </div>
-                </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-md border border-indigo-100 dark:border-indigo-800/30">
-                    {leave.type.replace('_', ' ')}
-                  </span>
-                  {leave.isEdited && (
-                    <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 font-black uppercase italic">
-                      <History size={10} /> Revised
-                    </span>
-                  )}
-                  {appliedOptionalHoliday && (
-                    <span className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-md text-[8px] font-black uppercase">
-                      <Sparkles size={8} /> {appliedOptionalHoliday.name}
-                    </span>
-                  )}
-                  {fixedHoliday && (
-                    <span className={`flex items-center gap-1 px-2 py-1 rounded-md text-[8px] font-black uppercase border ${fixedHoliday.isHalfDay ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                      {fixedHoliday.name} ({fixedHoliday.isHalfDay ? 'Half' : 'Full'})
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-50 dark:border-slate-800">
-                  <div className="flex gap-2">
-                    <button onClick={() => setSelectedLeave(leave)} className="p-2 text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg"><Eye size={16} /></button>
-                    {isWithinEditWindow(leave.createdAt) && <button onClick={() => handleEditInit(leave)} className="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg"><Edit2 size={16} /></button>}
+                  {/* Right: action buttons — stop propagation so they don't open the modal */}
+                  <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setSelectedLeave(leave)}
+                      className="w-8 h-8 flex items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg transition-all active:scale-90"
+                    >
+                      <Eye size={14} />
+                    </button>
+                    {isWithinEditWindow(leave.createdAt) && (
+                      <button
+                        onClick={() => handleEditInit(leave)}
+                        className="w-8 h-8 flex items-center justify-center text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg transition-all active:scale-90"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                    {leave.status === 'PENDING' && (
+                      <button
+                        onClick={() => onDelete(leave.id)}
+                        className="w-8 h-8 flex items-center justify-center text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg transition-all active:scale-90"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
-                  {leave.status === 'PENDING' && <button onClick={() => onDelete(leave.id)} className="p-2 text-red-500 bg-red-50 dark:bg-red-900/30 rounded-lg"><Trash2 size={16} /></button>}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Desktop View (Table Style) */}
+        {/* ── Desktop: table ── */}
         <div className="hidden md:block bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -281,10 +301,8 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                 {filteredLeaves.map(leave => {
                   const holidaysInRange = getHolidaysInRange(leave.startDate, leave.endDate);
                   const fixedHoliday = holidaysInRange.find(h => h.type === 'FIXED');
-                  // ✅ Uses broadened isOptionalLeave helper
                   const appliedOptionalHoliday = isOptionalLeave(leave)
                     ? holidaysInRange.find(h => h.type === "OPTIONAL") : null;
-
                   return (
                     <tr key={leave.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-800/30 transition-all group">
                       <td className="px-8 py-5">
@@ -314,12 +332,14 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                           )}
                           {fixedHoliday && (
                             <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${fixedHoliday.isHalfDay ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                               {fixedHoliday.name} ({fixedHoliday.isHalfDay ? 'Half' : 'Full'})
+                              {fixedHoliday.name} ({fixedHoliday.isHalfDay ? 'Half' : 'Full'})
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-5 text-sm font-black text-slate-900 dark:text-slate-300 whitespace-nowrap">{leave.days} <span className="text-[10px] font-bold text-slate-400 uppercase">Days</span></td>
+                      <td className="px-6 py-5 text-sm font-black text-slate-900 dark:text-slate-300 whitespace-nowrap">
+                        {leave.days} <span className="text-[10px] font-bold text-slate-400 uppercase">Days</span>
+                      </td>
                       <td className="px-6 py-5">
                         <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${getStatusColor(leave.status as any)}`}>
                           {getStatusIcon(leave.status as any)}
@@ -346,162 +366,110 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
       {selectedLeave && (() => {
         const modalHolidays = getHolidaysInRange(selectedLeave.startDate, selectedLeave.endDate);
         const modalFixedHoliday = modalHolidays.find(h => h.type === 'FIXED');
-        // ✅ Uses broadened isOptionalLeave helper — checks isOptional, type, AND holidayName
         const modalOptionalHoliday = isOptionalLeave(selectedLeave)
           ? modalHolidays.find(h => h.type === 'OPTIONAL') : null;
         const changedFields = selectedLeave.isEdited && selectedLeave.editSummary
           ? selectedLeave.editSummary.replace('Changed ', '').split(', ')
           : [];
-
         return (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-end sm:items-center justify-center z-[130] p-0 sm:p-4 animate-in fade-in slide-in-from-bottom-10 duration-300">
-          <div className="bg-white dark:bg-slate-900 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
-            <div className="px-6 sm:px-8 py-5 sm:py-6 border-b flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-              <div className="flex items-center gap-3">
-                <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white italic">Application Review</h3>
-                {selectedLeave.isEdited && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[8px] font-black uppercase border border-amber-200 dark:border-amber-700">
-                    <History size={9} /> Revised
-                  </span>
-                )}
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-end sm:items-center justify-center z-[130] p-0 sm:p-4 animate-in fade-in slide-in-from-bottom-10 duration-300">
+            <div className="bg-white dark:bg-slate-900 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
+              <div className="px-6 sm:px-8 py-5 sm:py-6 border-b flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white italic">Application Review</h3>
+                  {selectedLeave.isEdited && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[8px] font-black uppercase border border-amber-200 dark:border-amber-700">
+                      <History size={9} /> Revised
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => setSelectedLeave(null)} className="p-2 text-slate-400 hover:rotate-90 transition-all"><X className="w-5 h-5" /></button>
               </div>
-              <button onClick={() => setSelectedLeave(null)} className="p-2 text-slate-400 hover:rotate-90 transition-all"><X className="w-5 h-5" /></button>
-            </div>
-            
-            <div className="px-6 sm:px-8 py-6 sm:py-8 space-y-5 sm:space-y-7 overflow-y-auto">
-
-              {/* ── MODIFICATION SUMMARY BANNER ── */}
-              {selectedLeave.isEdited && (
-                <div className="p-4 sm:p-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-[1.5rem] flex items-start gap-3 animate-in fade-in zoom-in-95">
-                  <RefreshCcw className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Modification Summary</p>
-                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 italic">
-                      &quot;{selectedLeave.editSummary || 'Updated details'}&quot;
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* ── OPTIONAL HOLIDAY USED BANNER ── */}
-              {modalOptionalHoliday && (
-                <div className="p-4 sm:p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/40 rounded-[1.5rem] flex items-start gap-3 animate-in fade-in zoom-in-95">
-                  <div className="p-2 bg-indigo-600 rounded-xl shrink-0 mt-0.5">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">Optional Holiday Used</p>
-                    <p className="text-sm font-black text-indigo-900 dark:text-indigo-100">
-                      {modalOptionalHoliday.name}
-                    </p>
-                    <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
-                      {formatDate(modalOptionalHoliday.date)} — You have applied your optional holiday quota for this occasion.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* SCHEDULE TYPE */}
-              <div className={`p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] border transition-all duration-300 flex flex-col sm:flex-row gap-4 sm:items-center justify-between ${
-                changedFields.includes('Type')
-                  ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-800/50'
-                  : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'
-              }`}>
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-xl text-white shadow-lg ${changedFields.includes('Type') ? 'bg-amber-500' : 'bg-indigo-600'}`}>
-                    <Clock size={18} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${changedFields.includes('Type') ? 'text-amber-600' : 'text-indigo-600'}`}>
-                        Schedule Type
-                      </p>
-                      {changedFields.includes('Type') && (
-                        <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>
-                      )}
+              <div className="px-6 sm:px-8 py-6 sm:py-8 space-y-5 sm:space-y-7 overflow-y-auto">
+                {selectedLeave.isEdited && (
+                  <div className="p-4 sm:p-5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-[1.5rem] flex items-start gap-3">
+                    <RefreshCcw className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Modification Summary</p>
+                      <p className="text-xs font-bold text-amber-700 dark:text-amber-400 italic">&quot;{selectedLeave.editSummary || 'Updated details'}&quot;</p>
                     </div>
-                    <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase">{selectedLeave.type.replace('_', ' ')}</p>
-                    {/* Holiday pills — only show fixed holiday here; optional holiday has its own banner above */}
-                    <div className="flex flex-wrap gap-1.5 mt-2">
+                  </div>
+                )}
+                {modalOptionalHoliday && (
+                  <div className="p-4 sm:p-5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/40 rounded-[1.5rem] flex items-start gap-3">
+                    <div className="p-2 bg-indigo-600 rounded-xl shrink-0 mt-0.5"><Sparkles className="w-4 h-4 text-white" /></div>
+                    <div>
+                      <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">Optional Holiday Used</p>
+                      <p className="text-sm font-black text-indigo-900 dark:text-indigo-100">{modalOptionalHoliday.name}</p>
+                      <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{formatDate(modalOptionalHoliday.date)} — Optional holiday quota applied.</p>
+                    </div>
+                  </div>
+                )}
+                <div className={`p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] border flex flex-col sm:flex-row gap-4 sm:items-center justify-between ${changedFields.includes('Type') ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-800/50' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-xl text-white shadow-lg ${changedFields.includes('Type') ? 'bg-amber-500' : 'bg-indigo-600'}`}><Clock size={18} /></div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`text-[9px] font-black uppercase tracking-widest ${changedFields.includes('Type') ? 'text-amber-600' : 'text-indigo-600'}`}>Schedule Type</p>
+                        {changedFields.includes('Type') && <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>}
+                      </div>
+                      <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase">{selectedLeave.type.replace('_', ' ')}</p>
                       {modalFixedHoliday && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${modalFixedHoliday.isHalfDay ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                        <span className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${modalFixedHoliday.isHalfDay ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                           {modalFixedHoliday.name} ({modalFixedHoliday.isHalfDay ? 'Half' : 'Full'})
                         </span>
                       )}
                     </div>
                   </div>
-                </div>
-                
-                {/* TIMING */}
-                {selectedLeave.startTime && (
-                  <div className="sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0">
-                    <div className="flex sm:justify-end items-center gap-2">
-                      {changedFields.includes('Timing') && (
-                        <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>
-                      )}
-                      <p className={`text-[9px] font-black uppercase ${changedFields.includes('Timing') ? 'text-amber-500' : 'text-slate-400'}`}>Timing</p>
+                  {selectedLeave.startTime && (
+                    <div className="sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0">
+                      <div className="flex sm:justify-end items-center gap-2">
+                        {changedFields.includes('Timing') && <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>}
+                        <p className={`text-[9px] font-black uppercase ${changedFields.includes('Timing') ? 'text-amber-500' : 'text-slate-400'}`}>Timing</p>
+                      </div>
+                      <p className={`text-xs sm:text-sm font-black ${changedFields.includes('Timing') ? 'text-amber-700 dark:text-amber-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                        {format12hr(selectedLeave.startTime)}{selectedLeave.endTime ? ` - ${format12hr(selectedLeave.endTime)}` : ''}
+                      </p>
                     </div>
-                    <p className={`text-xs sm:text-sm font-black ${changedFields.includes('Timing') ? 'text-amber-700 dark:text-amber-300' : 'text-slate-700 dark:text-slate-200'}`}>
-                      {format12hr(selectedLeave.startTime)} {selectedLeave.endTime ? `- ${format12hr(selectedLeave.endTime)}` : ''}
+                  )}
+                </div>
+                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 sm:p-5 rounded-2xl border ${changedFields.includes('Dates') ? 'border-amber-300 dark:border-amber-800/50 bg-amber-50/20 dark:bg-amber-900/5' : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30'}`}>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Duration</label>
+                      {changedFields.includes('Dates') && <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>}
+                    </div>
+                    <p className={`font-bold text-sm sm:text-lg ${changedFields.includes('Dates') ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-slate-100'}`}>
+                      {formatDate(selectedLeave.startDate)} <ArrowRight size={12} className="inline mx-1 text-slate-300" /> {formatDate(selectedLeave.endDate)}
                     </p>
+                    <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 mt-1 uppercase">{selectedLeave.days} Work Days</p>
+                  </div>
+                  <div className="sm:text-right">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Status</label>
+                    <span className={`inline-block px-3 py-1 font-black text-[10px] uppercase rounded-lg border ${getStatusColor(selectedLeave.status as any)}`}>{selectedLeave.status}</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">My Justification</label>
+                    {changedFields.includes('Reason') && <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>}
+                  </div>
+                  <div className={`p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] border italic text-xs sm:text-sm ${changedFields.includes('Reason') ? 'bg-amber-50/40 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-300' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}>
+                    &quot;{selectedLeave.reason}&quot;
+                  </div>
+                </div>
+                {selectedLeave.managerComment && (
+                  <div className="p-5 sm:p-6 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl sm:rounded-[2rem] space-y-2">
+                    <p className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase flex items-center gap-2 tracking-widest"><MessageSquare size={14}/> Manager Feedback</p>
+                    <p className="text-xs sm:text-sm font-bold text-indigo-900 dark:text-indigo-200 italic leading-relaxed">&quot;{selectedLeave.managerComment}&quot;</p>
                   </div>
                 )}
               </div>
-
-              {/* DURATION */}
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 sm:p-5 rounded-2xl border transition-all ${
-                changedFields.includes('Dates')
-                ? 'border-amber-300 dark:border-amber-800/50 bg-amber-50/20 dark:bg-amber-900/5'
-                : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30'
-              }`}>
-                <div>
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Duration</label>
-                    {changedFields.includes('Dates') && (
-                      <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>
-                    )}
-                  </div>
-                  <p className={`font-bold text-sm sm:text-lg ${changedFields.includes('Dates') ? 'text-amber-900 dark:text-amber-200' : 'text-slate-900 dark:text-slate-100'}`}>
-                    {formatDate(selectedLeave.startDate)} <ArrowRight size={12} className="inline mx-1 text-slate-300" /> {formatDate(selectedLeave.endDate)}
-                  </p>
-                  <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 mt-1 uppercase">{selectedLeave.days} Work Days</p>
-                </div>
-                <div className="sm:text-right">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Status</label>
-                  <span className={`inline-block px-3 py-1 font-black text-[10px] uppercase rounded-lg border ${getStatusColor(selectedLeave.status as any)}`}>{selectedLeave.status}</span>
-                </div>
+              <div className="px-6 sm:px-8 py-5 sm:py-6 bg-slate-50 dark:bg-slate-800/50 border-t mt-auto">
+                <button onClick={() => setSelectedLeave(null)} className="w-full py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl sm:rounded-2xl font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">Dismiss</button>
               </div>
-
-              {/* JUSTIFICATION */}
-              <div>
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">My Justification</label>
-                  {changedFields.includes('Reason') && (
-                    <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>
-                  )}
-                </div>
-                <div className={`p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] border italic text-xs sm:text-sm transition-all ${
-                  changedFields.includes('Reason')
-                    ? 'bg-amber-50/40 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-300'
-                    : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300'
-                }`}>
-                  &quot;{selectedLeave.reason}&quot;
-                </div>
-              </div>
-
-              {selectedLeave.managerComment && (
-                <div className="p-5 sm:p-6 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl sm:rounded-[2rem] space-y-2">
-                  <p className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase flex items-center gap-2 tracking-widest"><MessageSquare size={14}/> Manager Feedback</p>
-                  <p className="text-xs sm:text-sm font-bold text-indigo-900 dark:text-indigo-200 italic leading-relaxed">&quot;{selectedLeave.managerComment}&quot;</p>
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 sm:px-8 py-5 sm:py-6 bg-slate-50 dark:bg-slate-800/50 border-t mt-auto">
-              <button onClick={() => setSelectedLeave(null)} className="w-full py-4 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl sm:rounded-2xl font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">Dismiss</button>
             </div>
           </div>
-        </div>
         );
       })()}
 
@@ -513,7 +481,6 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
               <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] italic">Revise Application</h3>
               <button onClick={() => setEditingLeave(null)}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
-            
             <div className="p-6 sm:p-8 space-y-6 overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-1.5">
@@ -525,7 +492,6 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                   <input type="date" disabled={['HALF', 'EARLY', 'LATE'].includes(editForm.type)} value={editForm.endDate} onChange={(e) => setEditForm({...editForm, endDate: e.target.value})} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm disabled:opacity-40" />
                 </div>
               </div>
-              
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Category</label>
                 <select value={editForm.type} onChange={(e) => setEditForm({...editForm, type: e.target.value, endDate: ['HALF', 'EARLY', 'LATE'].includes(e.target.value) ? editForm.startDate : editForm.endDate })} className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm appearance-none">
@@ -536,10 +502,9 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                   <option value="WORK_FROM_HOME">WFH</option>
                 </select>
               </div>
-
               {['HALF', 'EARLY', 'LATE'].includes(editForm.type) && (
                 <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
-                   {editForm.type === 'HALF' ? (
+                  {editForm.type === 'HALF' ? (
                     <div className="space-y-4">
                       <div className="grid grid-cols-3 gap-2">
                         {['FIRST_HALF', 'SECOND_HALF', 'CUSTOM'].map(s => (
@@ -548,7 +513,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                           </button>
                         ))}
                       </div>
-                      {(editForm.slot === 'CUSTOM') && (
+                      {editForm.slot === 'CUSTOM' && (
                         <div className="grid grid-cols-2 gap-3">
                           <input type="time" value={editForm.startTime} onChange={e => setEditForm(p => ({...p, startTime: e.target.value}))} className="w-full p-3 bg-white dark:bg-slate-700 rounded-xl font-bold text-xs" />
                           <input type="time" value={editForm.endTime} onChange={e => setEditForm(p => ({...p, endTime: e.target.value}))} className="w-full p-3 bg-white dark:bg-slate-700 rounded-xl font-bold text-xs" />
@@ -560,13 +525,11 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                   )}
                 </div>
               )}
-
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reason</label>
                 <textarea value={editForm.reason} onChange={(e) => setEditForm({...editForm, reason: e.target.value})} className="w-full p-5 bg-slate-50 dark:bg-slate-800 rounded-xl sm:rounded-[2rem] outline-none focus:ring-2 focus:ring-indigo-500 min-h-[120px] text-sm italic" />
               </div>
             </div>
-
             <div className="px-6 sm:px-8 py-5 sm:py-6 bg-slate-50 dark:bg-slate-800 border-t flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 mt-auto">
               <button onClick={() => setEditingLeave(null)} className="py-3 px-6 text-[10px] font-black uppercase text-slate-400">Cancel</button>
               <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center justify-center space-x-3 w-full sm:w-auto px-10 py-4 bg-indigo-600 text-white rounded-xl sm:rounded-2xl font-black uppercase text-[10px] disabled:opacity-50">

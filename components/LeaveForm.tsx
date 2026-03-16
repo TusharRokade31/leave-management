@@ -27,15 +27,18 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
   });
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [isOptionalLeave, setIsOptionalLeave] = useState<boolean>(false);
 
   const [clickStage, setClickStage] = useState<'start' | 'end'>('start');
   const [blockedHoliday, setBlockedHoliday] = useState<string | null>(null);
   const [blockedLeaveDate, setBlockedLeaveDate] = useState<string | null>(null);
   const [fixedHolidaysInRange, setFixedHolidaysInRange] = useState<{ date: string; name: string; isHalfDay?: boolean }[]>([]);
   const [clickedOptionalHoliday, setClickedOptionalHoliday] = useState<{ date: string; name: string } | null>(null);
-  const [tappedHolidayName, setTappedHolidayName] = useState<string | null>(null);
   const [hoveredTooltip, setHoveredTooltip] = useState<{ name: string; x: number; y: number } | null>(null);
+  const calendarRef = React.useRef<HTMLElement>(null);
+
+  const scrollToCalendar = () => {
+    calendarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const hasUsedApprovedOptional = useMemo(() => {
     if (!existingLeaves || !Array.isArray(existingLeaves)) return false;
@@ -47,7 +50,9 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
       const isThisYear = y === currentYear;
       const isApproved = l.status?.toUpperCase() === 'APPROVED' || l.status?.toUpperCase() === 'PENDING';
       if (!isThisYear || !isApproved) return false;
-      return l.isOptional === true || l.type === 'OPTIONAL' || (typeof l.holidayName === 'string' && l.holidayName.trim() !== '');
+      // ✅ ONLY check isOptional flag — never infer from holidayName
+      // holidayName can exist on regular leaves that overlap a holiday date (pre-OH-feature leaves)
+      return l.isOptional === true;
     });
   }, [existingLeaves]);
 
@@ -87,14 +92,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     const clickedDay = startOfDay(date);
 
     const holiday = getHoliday(key);
-
-    // Show holiday name banner (mobile-friendly)
-    if (holiday) {
-      setTappedHolidayName(holiday.name);
-      setTimeout(() => setTappedHolidayName(null), 2500);
-    } else {
-      setTappedHolidayName(null);
-    }
 
     if (isBefore(clickedDay, today)) return;
 
@@ -216,12 +213,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     }
   }, [startHoliday]);
 
-  useEffect(() => {
-    if (formData.type !== 'FULL') {
-      setIsOptionalLeave(false);
-    }
-  }, [formData.startDate, formData.endDate, formData.type]);
-
   const handleTypeChange = (type: LeaveFormData['type']): void => {
     setClickStage('start');
     setBlockedHoliday(null);
@@ -283,8 +274,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     try {
       const submitData = {
         ...finalData,
-        isOptional: isOptionalLeave && formData.type === 'FULL' && !hasUsedApprovedOptional,
-        holidayName: isOptionalLeave && detectedOptionalHolidays.length === 1 ? detectedOptionalHolidays[0].name : null,
+        isOptional: detectedOptionalHolidays.length === 1 && formData.type === 'FULL' && !hasUsedApprovedOptional,
+        holidayName: detectedOptionalHolidays.length === 1 && formData.type === 'FULL' && !hasUsedApprovedOptional ? detectedOptionalHolidays[0].name : null,
         reason: finalData.reason
       };
       await onSubmit(submitData as LeaveFormData);
@@ -747,7 +738,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
           <div className="p-4 sm:p-8 space-y-6 sm:space-y-10">
 
             {/* ── Calendar Section ── */}
-            <section className="bg-slate-50 dark:bg-slate-800/30 p-3 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-100 dark:border-slate-800">
+            <section ref={calendarRef} className="bg-slate-50 dark:bg-slate-800/30 p-3 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2 mb-4 sm:mb-6 text-indigo-600 dark:text-indigo-400">
                 <CalendarIcon size={15} />
                 <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest">Select Leave Dates</span>
@@ -814,13 +805,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                     <span className="text-[9px] font-bold text-slate-400 uppercase">On Leave</span>
                   </div>
                 </div>
-
-                {/* Mobile holiday name banner — shown on tap, auto-dismisses */}
-                {tappedHolidayName && (
-                  <div className="sm:hidden w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 dark:bg-slate-700 text-center animate-in fade-in slide-in-from-top-1 duration-150">
-                    <span className="text-[11px] font-black text-white tracking-wide">{tappedHolidayName}</span>
-                  </div>
-                )}
 
                 {!['HALF', 'EARLY', 'LATE'].includes(formData.type) && (
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
@@ -940,26 +924,34 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
             <section className="flex flex-col sm:flex-row gap-3 sm:gap-6 w-full">
               <div className="flex-1 min-w-0">
                 <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">Start Date</label>
-                <div className={`${inputBase} flex items-center justify-between cursor-default`}>
+                <button
+                  type="button"
+                  onClick={scrollToCalendar}
+                  className={`${inputBase} flex items-center justify-between cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all text-left w-full`}
+                >
                   <span className={`truncate ${formData.startDate ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500 font-normal'}`}>
                     {formData.startDate
                       ? new Date(formData.startDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-                      : 'Not selected'}
+                      : 'Tap to select'}
                   </span>
-                  <CalendarIcon className="text-slate-400 w-5 h-5 flex-shrink-0 ml-2" />
-                </div>
+                  <CalendarIcon className="text-indigo-400 w-5 h-5 flex-shrink-0 ml-2" />
+                </button>
               </div>
               {!['HALF', 'EARLY', 'LATE'].includes(formData.type) && (
                 <div className="flex-1 min-w-0">
                   <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">End Date</label>
-                  <div className={`${inputBase} flex items-center justify-between cursor-default`}>
+                  <button
+                    type="button"
+                    onClick={scrollToCalendar}
+                    className={`${inputBase} flex items-center justify-between cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all text-left w-full`}
+                  >
                     <span className={`truncate ${formData.endDate ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500 font-normal'}`}>
                       {formData.endDate
                         ? new Date(formData.endDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-                        : 'Not selected'}
+                        : 'Tap to select'}
                     </span>
-                    <CalendarIcon className="text-slate-400 w-5 h-5 flex-shrink-0 ml-2" />
-                  </div>
+                    <CalendarIcon className="text-indigo-400 w-5 h-5 flex-shrink-0 ml-2" />
+                  </button>
                 </div>
               )}
             </section>
@@ -1049,19 +1041,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
                     <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400">
-                      {new Date(formData.startDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} — {detectedOptionalHolidays[0].name}
+                      {new Date(formData.startDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} — {detectedOptionalHolidays[0].name} (Optional)
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsOptionalLeave(!isOptionalLeave)}
-                      className={`ml-auto flex-shrink-0 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide transition-all border ${
-                        isOptionalLeave
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-300 dark:border-indigo-700'
-                      }`}
-                    >
-                      {isOptionalLeave ? '✓ Applied' : 'Apply Quota'}
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1091,7 +1072,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                 disabled={isSubmitting}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-4 sm:py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-2 sm:gap-3 shadow-none dark:shadow-none disabled:opacity-50"
               >
-                {isSubmitting ? 'Processing...' : 'Submit Application'}
+                {isSubmitting ? 'Processing...' : 'Submit'}
                 {!isSubmitting && <ChevronRight className="w-4 h-4 flex-shrink-0" />}
               </button>
             </div>
