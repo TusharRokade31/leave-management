@@ -27,6 +27,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
   });
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [useOptionalHoliday, setUseOptionalHoliday] = useState(false); // 1️⃣ Manual toggle state
 
   const [clickStage, setClickStage] = useState<'start' | 'end'>('start');
   const [blockedHoliday, setBlockedHoliday] = useState<string | null>(null);
@@ -50,8 +51,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
       const isThisYear = y === currentYear;
       const isApproved = l.status?.toUpperCase() === 'APPROVED' || l.status?.toUpperCase() === 'PENDING';
       if (!isThisYear || !isApproved) return false;
-      // ✅ ONLY check isOptional flag — never infer from holidayName
-      // holidayName can exist on regular leaves that overlap a holiday date (pre-OH-feature leaves)
       return l.isOptional === true;
     });
   }, [existingLeaves]);
@@ -86,6 +85,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
   };
 
   const handleDayClick = (date: Date) => {
+    setUseOptionalHoliday(false); // 2️⃣ Reset optional usage when user changes date
     const isSingleDayMode = ['HALF', 'EARLY', 'LATE'].includes(formData.type);
     const key = dateToString(date);
     const today = startOfDay(new Date());
@@ -95,8 +95,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
 
     if (isBefore(clickedDay, today)) return;
 
-    // Block if date already has an approved/pending leave —
-    // BUT allow optional holidays through so user can apply optional quota
     const isOptionalHolidayDate = holiday?.type === 'OPTIONAL';
     if (approvedLeaveDates.has(key) && !isOptionalHolidayDate) {
       setBlockedLeaveDate(key);
@@ -156,7 +154,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     if (!existingLeaves || !Array.isArray(existingLeaves)) return s;
     existingLeaves.forEach(l => {
       const status = l.status?.toUpperCase();
-      // Only show active leaves on calendar — skip rejected/deleted
       if (status === 'REJECTED' || status === 'DELETED' || status === 'CANCELLED') return;
       if (!l.startDate || !l.endDate) return;
       const start = new Date(String(l.startDate).slice(0, 10) + 'T12:00:00');
@@ -171,8 +168,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     return s;
   }, [existingLeaves]);
 
-  // Only APPROVED or PENDING leaves — used to block re-application
-  // Excludes optional holiday dates so users can re-apply optional quota on those days
   const approvedLeaveDates = useMemo((): Set<string> => {
     const s = new Set<string>();
     if (!existingLeaves || !Array.isArray(existingLeaves)) return s;
@@ -187,7 +182,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
         const m = String(cur.getMonth() + 1).padStart(2, '0');
         const d = String(cur.getDate()).padStart(2, '0');
         const key = `${y}-${m}-${d}`;
-        // Don't block optional holiday dates — user may want to apply optional quota
         const h = getHoliday(key);
         if (h?.type !== 'OPTIONAL') {
           s.add(key);
@@ -255,8 +249,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
       return;
     }
 
-    // Block if any date in the selected range is already approved/pending
-    // (optional holiday dates are exempt — user may be applying optional quota)
     if (finalData.startDate && finalData.endDate) {
       const rangeStart = stringToDate(finalData.startDate)!;
       const rangeEnd = stringToDate(finalData.endDate)!;
@@ -274,8 +266,19 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     try {
       const submitData = {
         ...finalData,
-        isOptional: detectedOptionalHolidays.length === 1 && formData.type === 'FULL' && !hasUsedApprovedOptional,
-        holidayName: detectedOptionalHolidays.length === 1 && formData.type === 'FULL' && !hasUsedApprovedOptional ? detectedOptionalHolidays[0].name : null,
+        // 3️⃣ Updated submit logic to respect toggle
+        isOptional:
+          useOptionalHoliday &&
+          detectedOptionalHolidays.length === 1 &&
+          formData.type === 'FULL' &&
+          !hasUsedApprovedOptional,
+        holidayName:
+          useOptionalHoliday &&
+          detectedOptionalHolidays.length === 1 &&
+          formData.type === 'FULL' &&
+          !hasUsedApprovedOptional
+            ? detectedOptionalHolidays[0].name
+            : null,
         reason: finalData.reason
       };
       await onSubmit(submitData as LeaveFormData);
@@ -290,7 +293,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
   const inputBase = "w-full bg-slate-100/50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-600 rounded-2xl px-4 py-4 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all outline-none appearance-none font-bold text-base shadow-none dark:shadow-none";
 
   return (
-    /* ── Outer scroll wrapper: full-height on mobile, scrollable ── */
     <div className="w-full min-h-screen sm:min-h-0 overflow-y-auto sm:overflow-visible px-0 sm:px-4 py-0 sm:py-4">
       <div className="max-w-3xl mx-auto">
         <style jsx global>{`
@@ -302,7 +304,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
           .react-datepicker-wrapper { width: 100%; }
           button:focus, select:focus, input:focus { outline: none !important; }
 
-          /* ── Calendar container ── */
           .leave-form-calendar {
             width: 100% !important;
             max-width: 380px !important;
@@ -312,398 +313,189 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
             font-family: inherit !important;
             box-sizing: border-box !important;
           }
-
-          /* On mobile, stretch full-width */
           @media (max-width: 639px) {
-            .leave-form-calendar {
-              max-width: 100% !important;
-            }
+            .leave-form-calendar { max-width: 100% !important; }
           }
-
-          /* ── Hide double-arrow nav buttons ── */
           .leave-form-calendar .react-calendar__navigation__prev2-button,
-          .leave-form-calendar .react-calendar__navigation__next2-button {
-            display: none !important;
-          }
-
-          /* ── Navigation bar ── */
+          .leave-form-calendar .react-calendar__navigation__next2-button { display: none !important; }
           .leave-form-calendar .react-calendar__navigation {
-            display: flex !important;
-            align-items: center !important;
-            margin-bottom: 10px !important;
-            background: transparent !important;
-            height: auto !important;
+            display: flex !important; align-items: center !important;
+            margin-bottom: 10px !important; background: transparent !important; height: auto !important;
           }
           .leave-form-calendar .react-calendar__navigation button {
-            background: transparent !important;
-            border: none !important;
-            color: #6366f1 !important;
-            font-weight: 800 !important;
-            font-size: 13px !important;
-            min-width: 32px !important;
-            padding: 6px 8px !important;
-            border-radius: 8px !important;
-            transition: background 0.15s !important;
-            line-height: 1 !important;
+            background: transparent !important; border: none !important; color: #6366f1 !important;
+            font-weight: 800 !important; font-size: 13px !important; min-width: 32px !important;
+            padding: 6px 8px !important; border-radius: 8px !important; transition: background 0.15s !important; line-height: 1 !important;
           }
-          .leave-form-calendar .react-calendar__navigation button:hover {
-            background: rgba(99,102,241,0.12) !important;
-          }
+          .leave-form-calendar .react-calendar__navigation button:hover { background: rgba(99,102,241,0.12) !important; }
           .leave-form-calendar .react-calendar__navigation__label {
-            flex-grow: 1 !important;
-            font-size: 13px !important;
-            font-weight: 900 !important;
-            letter-spacing: 0.05em !important;
-            text-transform: uppercase !important;
+            flex-grow: 1 !important; font-size: 13px !important; font-weight: 900 !important;
+            letter-spacing: 0.05em !important; text-transform: uppercase !important;
           }
-
-          /* ── Weekday header row ── */
           .leave-form-calendar .react-calendar__month-view__weekdays {
-            text-align: center !important;
-            margin-bottom: 4px !important;
-            display: grid !important;
-            grid-template-columns: repeat(7, 1fr) !important;
+            text-align: center !important; margin-bottom: 4px !important;
+            display: grid !important; grid-template-columns: repeat(7, 1fr) !important;
           }
           .leave-form-calendar .react-calendar__month-view__weekdays__weekday {
-            padding: 4px 0 !important;
-            font-size: 9px !important;
-            font-weight: 900 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.05em !important;
-            color: #94a3b8 !important;
-            flex: 1 !important;
-            text-align: center !important;
+            padding: 4px 0 !important; font-size: 9px !important; font-weight: 900 !important;
+            text-transform: uppercase !important; letter-spacing: 0.05em !important;
+            color: #94a3b8 !important; flex: 1 !important; text-align: center !important;
           }
-          .leave-form-calendar .react-calendar__month-view__weekdays__weekday abbr {
-            text-decoration: none !important;
-          }
-
-          /* ── Month view: strict 7-col grid, no overflow ── */
-          .leave-form-calendar .react-calendar__month-view {
-            width: 100% !important;
-            box-sizing: border-box !important;
-            overflow: hidden !important;
-          }
+          .leave-form-calendar .react-calendar__month-view__weekdays__weekday abbr { text-decoration: none !important; }
+          .leave-form-calendar .react-calendar__month-view { width: 100% !important; box-sizing: border-box !important; overflow: hidden !important; }
           .leave-form-calendar .react-calendar__month-view__days {
-            display: grid !important;
-            grid-template-columns: repeat(7, 1fr) !important;
-            gap: 3px !important;
-            width: 100% !important;
-            box-sizing: border-box !important;
+            display: grid !important; grid-template-columns: repeat(7, 1fr) !important;
+            gap: 3px !important; width: 100% !important; box-sizing: border-box !important;
           }
-
-          /* ── Base tile ── */
           .leave-form-calendar .react-calendar__tile {
-            position: relative !important;
-            width: 100% !important;
-            aspect-ratio: 1 / 1 !important;
-            min-width: 0 !important;
-            max-width: 100% !important;
-            min-height: 40px !important;
-            box-sizing: border-box !important;
-            border-radius: 8px !important;
-            border: 1.5px solid rgba(148,163,184,0.15) !important;
-            font-weight: 700 !important;
-            font-size: 11px !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background: transparent !important;
-            padding: 0 !important;
-            cursor: pointer !important;
-            transition: background 0.15s, border-color 0.15s !important;
-            overflow: hidden !important;
-            flex: unset !important;
+            position: relative !important; width: 100% !important; aspect-ratio: 1 / 1 !important;
+            min-width: 0 !important; max-width: 100% !important; min-height: 40px !important;
+            box-sizing: border-box !important; border-radius: 8px !important;
+            border: 1.5px solid rgba(148,163,184,0.15) !important; font-weight: 700 !important;
+            font-size: 11px !important; display: flex !important; flex-direction: column !important;
+            align-items: center !important; justify-content: center !important;
+            background: transparent !important; padding: 0 !important; cursor: pointer !important;
+            transition: background 0.15s, border-color 0.15s !important; overflow: hidden !important; flex: unset !important;
           }
-
-          /* ── Regular date number ── */
           .leave-form-calendar .react-calendar__tile abbr {
-            display: block !important;
-            line-height: 1.2 !important;
-            font-size: 11px !important;
-            position: relative !important;
-            z-index: 1 !important;
+            display: block !important; line-height: 1.2 !important; font-size: 11px !important;
+            position: relative !important; z-index: 1 !important;
           }
-
-          /* ── Current/future date colors (light) ── */
-          .leave-form-calendar .react-calendar__tile:not(.react-calendar__tile--neighboringMonth) {
-            color: #1e293b !important;
-          }
-          .dark .leave-form-calendar .react-calendar__tile:not(.react-calendar__tile--neighboringMonth) {
-            color: #f1f5f9 !important;
-          }
-
-          /* ── Past dates ── */
+          .leave-form-calendar .react-calendar__tile:not(.react-calendar__tile--neighboringMonth) { color: #1e293b !important; }
+          .dark .leave-form-calendar .react-calendar__tile:not(.react-calendar__tile--neighboringMonth) { color: #f1f5f9 !important; }
           .leave-form-calendar .react-calendar__tile--past:not(.react-calendar__tile--neighboringMonth) {
-            color: #cbd5e1 !important;
-            cursor: not-allowed !important;
-            border-color: transparent !important;
-            background: transparent !important;
-            pointer-events: none !important;
-            opacity: 1 !important;
+            color: #cbd5e1 !important; cursor: not-allowed !important; border-color: transparent !important;
+            background: transparent !important; pointer-events: none !important; opacity: 1 !important;
           }
-          .dark .leave-form-calendar .react-calendar__tile--past:not(.react-calendar__tile--neighboringMonth) {
-            color: #334155 !important;
-          }
-          .leave-form-calendar .react-calendar__tile--past abbr {
-            color: #cbd5e1 !important;
-          }
-          .dark .leave-form-calendar .react-calendar__tile--past abbr {
-            color: #334155 !important;
-          }
-
-          /* ── Neighboring month tiles ── */
+          .dark .leave-form-calendar .react-calendar__tile--past:not(.react-calendar__tile--neighboringMonth) { color: #334155 !important; }
+          .leave-form-calendar .react-calendar__tile--past abbr { color: #cbd5e1 !important; }
+          .dark .leave-form-calendar .react-calendar__tile--past abbr { color: #334155 !important; }
           .leave-form-calendar .react-calendar__tile--neighboringMonth {
-            background: transparent !important;
-            border-color: transparent !important;
-            color: transparent !important;
-            pointer-events: none !important;
-            opacity: 0 !important;
+            background: transparent !important; border-color: transparent !important;
+            color: transparent !important; pointer-events: none !important; opacity: 0 !important;
           }
-
-          /* ── Today tile (not selected) ── */
           .leave-form-calendar .react-calendar__tile--now:not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(99,102,241,0.1) !important;
-            border-color: #6366f1 !important;
-            color: #6366f1 !important;
+            background: rgba(99,102,241,0.1) !important; border-color: #6366f1 !important; color: #6366f1 !important;
           }
           .dark .leave-form-calendar .react-calendar__tile--now:not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
             background: rgba(99,102,241,0.18) !important;
           }
-
-          /* ── Selected / active tile ── */
           .leave-form-calendar .react-calendar__tile--active,
           .leave-form-calendar .react-calendar__tile--rangeStart,
           .leave-form-calendar .react-calendar__tile--rangeEnd {
-            background: #4f46e5 !important;
-            color: white !important;
-            border-color: #4f46e5 !important;
-            border-radius: 8px !important;
+            background: #4f46e5 !important; color: white !important;
+            border-color: #4f46e5 !important; border-radius: 8px !important;
           }
           .leave-form-calendar .react-calendar__tile--active abbr,
           .leave-form-calendar .react-calendar__tile--rangeStart abbr,
-          .leave-form-calendar .react-calendar__tile--rangeEnd abbr {
-            color: white !important;
-          }
-
-          /* ── Range middle tiles ── */
+          .leave-form-calendar .react-calendar__tile--rangeEnd abbr { color: white !important; }
           .leave-form-calendar .react-calendar__tile--range:not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: #e0e7ff !important;
-            color: #4338ca !important;
-            border-radius: 0 !important;
-            border-color: transparent !important;
+            background: #e0e7ff !important; color: #4338ca !important;
+            border-radius: 0 !important; border-color: transparent !important;
           }
           .dark .leave-form-calendar .react-calendar__tile--range:not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: #312e81 !important;
-            color: #e0e7ff !important;
+            background: #312e81 !important; color: #e0e7ff !important;
           }
           .leave-form-calendar .react-calendar__tile--rangeStart {
-            border-top-left-radius: 8px !important;
-            border-bottom-left-radius: 8px !important;
-            border-top-right-radius: 0 !important;
-            border-bottom-right-radius: 0 !important;
+            border-top-left-radius: 8px !important; border-bottom-left-radius: 8px !important;
+            border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important;
           }
           .leave-form-calendar .react-calendar__tile--rangeEnd {
-            border-top-right-radius: 8px !important;
-            border-bottom-right-radius: 8px !important;
-            border-top-left-radius: 0 !important;
-            border-bottom-left-radius: 0 !important;
+            border-top-right-radius: 8px !important; border-bottom-right-radius: 8px !important;
+            border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important;
           }
-          .leave-form-calendar .react-calendar__tile--rangeStart.react-calendar__tile--rangeEnd {
-            border-radius: 8px !important;
-          }
-
-          /* ── Fixed holiday tile ── */
+          .leave-form-calendar .react-calendar__tile--rangeStart.react-calendar__tile--rangeEnd { border-radius: 8px !important; }
           .leave-form-calendar .tile-holiday-fixed:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(148,163,184,0.08) !important;
-            border-color: rgba(148,163,184,0.3) !important;
+            background: rgba(148,163,184,0.08) !important; border-color: rgba(148,163,184,0.3) !important;
           }
           .dark .leave-form-calendar .tile-holiday-fixed:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
             background: rgba(100,116,139,0.12) !important;
           }
-
-          /* ── Optional holiday tile — dotted blue ── */
           .leave-form-calendar .tile-holiday-optional:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(59,130,246,0.06) !important;
-            border-color: #3b82f6 !important;
-            border-style: dashed !important;
+            background: rgba(59,130,246,0.06) !important; border-color: #3b82f6 !important; border-style: dashed !important;
           }
           .dark .leave-form-calendar .tile-holiday-optional:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(59,130,246,0.1) !important;
-            border-color: #60a5fa !important;
-            border-style: dashed !important;
+            background: rgba(59,130,246,0.1) !important; border-color: #60a5fa !important; border-style: dashed !important;
           }
-
-          /* ── Optional holiday tile — used (red dotted) ── */
           .leave-form-calendar .tile-holiday-optional-used:not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(239,68,68,0.07) !important;
-            border-color: #ef4444 !important;
-            border-style: dashed !important;
+            background: rgba(239,68,68,0.07) !important; border-color: #ef4444 !important; border-style: dashed !important;
           }
           .dark .leave-form-calendar .tile-holiday-optional-used:not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(239,68,68,0.12) !important;
-            border-color: #f87171 !important;
-            border-style: dashed !important;
+            background: rgba(239,68,68,0.12) !important; border-color: #f87171 !important; border-style: dashed !important;
           }
-          .leave-form-calendar .tile-holiday-optional-used abbr {
-            display: none !important;
-          }
-          .leave-form-calendar .tile-holiday-optional-used .holiday-badge {
-            color: #ef4444 !important;
-          }
-          .dark .leave-form-calendar .tile-holiday-optional-used .holiday-badge {
-            color: #f87171 !important;
-          }
-          .leave-form-calendar .react-calendar__tile--past.tile-holiday-optional-used .holiday-badge {
-            color: #fca5a5 !important;
-          }
-          .dark .leave-form-calendar .react-calendar__tile--past.tile-holiday-optional-used .holiday-badge {
-            color: #7f1d1d !important;
-          }
-
-          /* ── Existing leave tile — red tint ── */
+          .leave-form-calendar .tile-holiday-optional-used abbr { display: none !important; }
+          .leave-form-calendar .tile-holiday-optional-used .holiday-badge { color: #ef4444 !important; }
+          .dark .leave-form-calendar .tile-holiday-optional-used .holiday-badge { color: #f87171 !important; }
+          .leave-form-calendar .react-calendar__tile--past.tile-holiday-optional-used .holiday-badge { color: #fca5a5 !important; }
+          .dark .leave-form-calendar .react-calendar__tile--past.tile-holiday-optional-used .holiday-badge { color: #7f1d1d !important; }
           .leave-form-calendar .tile-has-leave:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(239,68,68,0.08) !important;
-            border-color: rgba(239,68,68,0.4) !important;
+            background: rgba(239,68,68,0.08) !important; border-color: rgba(239,68,68,0.4) !important;
           }
           .dark .leave-form-calendar .tile-has-leave:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(239,68,68,0.12) !important;
-            border-color: rgba(239,68,68,0.45) !important;
+            background: rgba(239,68,68,0.12) !important; border-color: rgba(239,68,68,0.45) !important;
           }
-          .leave-form-calendar .tile-has-leave abbr {
-            color: #ef4444 !important;
-          }
-          .dark .leave-form-calendar .tile-has-leave abbr {
-            color: #f87171 !important;
-          }
-          .leave-form-calendar .react-calendar__tile--past.tile-has-leave abbr {
-            color: #fca5a5 !important;
-          }
-          .dark .leave-form-calendar .react-calendar__tile--past.tile-has-leave abbr {
-            color: #7f1d1d !important;
-          }
-
-          /* ── Hide date number on holiday tiles ── */
+          .leave-form-calendar .tile-has-leave abbr { color: #ef4444 !important; }
+          .dark .leave-form-calendar .tile-has-leave abbr { color: #f87171 !important; }
+          .leave-form-calendar .react-calendar__tile--past.tile-has-leave abbr { color: #fca5a5 !important; }
+          .dark .leave-form-calendar .react-calendar__tile--past.tile-has-leave abbr { color: #7f1d1d !important; }
           .leave-form-calendar .tile-holiday-fixed abbr,
-          .leave-form-calendar .tile-holiday-optional abbr {
-            display: none !important;
-          }
-
-          /* ── Holiday badge ── */
+          .leave-form-calendar .tile-holiday-optional abbr { display: none !important; }
           .leave-form-calendar .react-calendar__tile .holiday-badge {
-            position: absolute !important;
-            inset: 0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            font-size: 9px !important;
-            font-weight: 900 !important;
-            line-height: 1 !important;
-            letter-spacing: 0.04em !important;
-            pointer-events: none !important;
-            z-index: 2 !important;
+            position: absolute !important; inset: 0 !important; display: flex !important;
+            align-items: center !important; justify-content: center !important;
+            font-size: 9px !important; font-weight: 900 !important; line-height: 1 !important;
+            letter-spacing: 0.04em !important; pointer-events: none !important; z-index: 2 !important;
           }
           .leave-form-calendar .tile-holiday-fixed .holiday-badge { color: #94a3b8 !important; }
           .leave-form-calendar .tile-holiday-optional .holiday-badge { color: #3b82f6 !important; }
           .dark .leave-form-calendar .tile-holiday-optional .holiday-badge { color: #60a5fa !important; }
           .leave-form-calendar .react-calendar__tile--active .holiday-badge,
           .leave-form-calendar .react-calendar__tile--rangeStart .holiday-badge,
-          .leave-form-calendar .react-calendar__tile--rangeEnd .holiday-badge {
-            color: rgba(255,255,255,0.95) !important;
-          }
-          .leave-form-calendar .react-calendar__tile--range:not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) .holiday-badge {
-            color: #4338ca !important;
-          }
-          .dark .leave-form-calendar .react-calendar__tile--range:not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) .holiday-badge {
-            color: #c7d2fe !important;
-          }
+          .leave-form-calendar .react-calendar__tile--rangeEnd .holiday-badge { color: rgba(255,255,255,0.95) !important; }
+          .leave-form-calendar .react-calendar__tile--range:not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) .holiday-badge { color: #4338ca !important; }
+          .dark .leave-form-calendar .react-calendar__tile--range:not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) .holiday-badge { color: #c7d2fe !important; }
           .leave-form-calendar .react-calendar__tile--past .holiday-badge { color: #cbd5e1 !important; }
           .dark .leave-form-calendar .react-calendar__tile--past .holiday-badge { color: #334155 !important; }
-
-          /* ── CSS-only holiday name tooltip — desktop only ── */
-          /* Tile keeps overflow:hidden — tooltip rendered via JS portal instead */
-          .leave-form-calendar .react-calendar__tile .holiday-name-tooltip {
-            display: none !important;
-          }
+          .leave-form-calendar .react-calendar__tile .holiday-name-tooltip { display: none !important; }
           .leave-form-calendar-tooltip {
-            position: fixed;
-            background: #1e293b;
-            color: #f1f5f9;
-            padding: 5px 10px;
-            border-radius: 8px;
-            font-size: 10px;
-            font-weight: 700;
-            max-width: 160px;
-            text-align: center;
-            line-height: 1.4;
-            pointer-events: none;
-            z-index: 9999;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-            border: 1px solid rgba(255,255,255,0.1);
-            white-space: normal;
-            transform: translateX(-50%) translateY(-100%);
-            margin-top: -8px;
+            position: fixed; background: #1e293b; color: #f1f5f9; padding: 5px 10px;
+            border-radius: 8px; font-size: 10px; font-weight: 700; max-width: 160px;
+            text-align: center; line-height: 1.4; pointer-events: none; z-index: 9999;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);
+            white-space: normal; transform: translateX(-50%) translateY(-100%); margin-top: -8px;
           }
           .leave-form-calendar-tooltip::after {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 5px solid transparent;
-            border-top-color: #1e293b;
+            content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+            border: 5px solid transparent; border-top-color: #1e293b;
           }
-
-          /* ── xs (< 375px) ── */
           @media (max-width: 374px) {
-            .leave-form-calendar .react-calendar__tile {
-              font-size: 9px !important;
-              min-height: 34px !important;
-              border-radius: 5px !important;
-            }
+            .leave-form-calendar .react-calendar__tile { font-size: 9px !important; min-height: 34px !important; border-radius: 5px !important; }
             .leave-form-calendar .react-calendar__tile abbr { font-size: 9px !important; }
             .leave-form-calendar .react-calendar__tile .holiday-badge { font-size: 7px !important; }
             .leave-form-calendar .react-calendar__navigation button { font-size: 11px !important; min-width: 28px !important; }
             .leave-form-calendar .react-calendar__navigation__label { font-size: 11px !important; }
             .leave-form-calendar .react-calendar__month-view__days { gap: 1px !important; }
           }
-
-          /* ── sm (375–639px) ── */
           @media (min-width: 375px) and (max-width: 639px) {
-            .leave-form-calendar .react-calendar__tile {
-              font-size: 10px !important;
-              min-height: 38px !important;
-              border-radius: 6px !important;
-            }
+            .leave-form-calendar .react-calendar__tile { font-size: 10px !important; min-height: 38px !important; border-radius: 6px !important; }
             .leave-form-calendar .react-calendar__tile abbr { font-size: 10px !important; }
             .leave-form-calendar .react-calendar__tile .holiday-badge { font-size: 8px !important; }
             .leave-form-calendar .react-calendar__month-view__days { gap: 2px !important; }
           }
-
-          /* ── Range start/end radius on mobile ── */
           @media (max-width: 639px) {
             .leave-form-calendar .react-calendar__tile--active,
-            .leave-form-calendar .react-calendar__tile--rangeStart.react-calendar__tile--rangeEnd {
-              border-radius: 6px !important;
-            }
+            .leave-form-calendar .react-calendar__tile--rangeStart.react-calendar__tile--rangeEnd { border-radius: 6px !important; }
             .leave-form-calendar .react-calendar__tile--rangeStart {
-              border-top-left-radius: 6px !important;
-              border-bottom-left-radius: 6px !important;
-              border-top-right-radius: 0 !important;
-              border-bottom-right-radius: 0 !important;
+              border-top-left-radius: 6px !important; border-bottom-left-radius: 6px !important;
+              border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important;
             }
             .leave-form-calendar .react-calendar__tile--rangeEnd {
-              border-top-right-radius: 6px !important;
-              border-bottom-right-radius: 6px !important;
-              border-top-left-radius: 0 !important;
-              border-bottom-left-radius: 0 !important;
+              border-top-right-radius: 6px !important; border-bottom-right-radius: 6px !important;
+              border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important;
             }
           }
         `}</style>
 
-
-        {/* Fixed-position holiday name tooltip — desktop hover only */}
         {hoveredTooltip && (
           <div
             className="leave-form-calendar-tooltip hidden sm:block"
@@ -715,7 +507,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-none sm:rounded-[2.5rem] overflow-hidden shadow-sm min-h-screen sm:min-h-0">
 
-          {/* ── Header ── */}
           <div className="px-4 sm:px-8 py-5 sm:py-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 z-10 bg-white dark:bg-slate-900">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg dark:shadow-none flex-shrink-0">
@@ -729,7 +520,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
             <button
               onClick={onCancel}
               className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center"
-              aria-label="Close"
             >
               <X className="w-5 h-5 text-slate-400" />
             </button>
@@ -737,7 +527,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
 
           <div className="p-4 sm:p-8 space-y-6 sm:space-y-10">
 
-            {/* ── Calendar Section ── */}
             <section ref={calendarRef} className="bg-slate-50 dark:bg-slate-800/30 p-3 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2 mb-4 sm:mb-6 text-indigo-600 dark:text-indigo-400">
                 <CalendarIcon size={15} />
@@ -785,7 +574,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                 onClickDay={(date) => handleDayClick(date)}
               />
 
-              {/* Legend + stage hint */}
               <div className="mt-3 flex flex-col items-center gap-2">
                 <div className="flex gap-3 justify-center flex-wrap">
                   <div className="flex items-center gap-1.5">
@@ -814,7 +602,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             </section>
 
-            {/* ── Blocked: existing leave on this date ── */}
             {blockedLeaveDate && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-in slide-in-from-top-2 duration-200">
                 <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -829,7 +616,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             )}
 
-            {/* ── Blocked: single fixed holiday ── */}
             {blockedHoliday && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-in slide-in-from-top-2 duration-200">
                 <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -844,7 +630,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             )}
 
-            {/* ── Info: fixed holidays in range ── */}
             {fixedHolidaysInRange.length > 0 && !blockedHoliday && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 animate-in slide-in-from-top-2 duration-200">
                 <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -878,7 +663,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             )}
 
-            {/* ── Info: optional holiday clicked ── */}
             {clickedOptionalHoliday && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 animate-in slide-in-from-top-2 duration-200">
                 <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -899,28 +683,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             )}
 
-            {/* ── Category ── */}
-            <section>
-              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 block">Category</label>
-              <div className="relative group">
-                <select
-                  value={formData.type}
-                  onChange={(e) => handleTypeChange(e.target.value as any)}
-                  className={inputBase}
-                >
-                  <option value="FULL">Full Day</option>
-                  <option value="HALF">Half Day</option>
-                  <option value="EARLY">Early Leave</option>
-                  <option value="LATE">Late Coming</option>
-                  <option value="WORK_FROM_HOME">Work From Home (WFH)</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-indigo-500 transition-colors">
-                  <ChevronDown size={20} />
-                </div>
-              </div>
-            </section>
-
-            {/* ── Date display ── */}
             <section className="flex flex-col sm:flex-row gap-3 sm:gap-6 w-full">
               <div className="flex-1 min-w-0">
                 <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">Start Date</label>
@@ -956,7 +718,67 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               )}
             </section>
 
-            {/* ── Time section ── */}
+            {/* ── Optional Holiday Quota Banner (Restored) ── */}
+            {formData.type === 'FULL' &&
+             detectedOptionalHolidays.length === 1 &&
+             !hasUsedApprovedOptional && (
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 animate-in slide-in-from-top-2 duration-200">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Sparkles className="w-4 h-4 text-indigo-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-black uppercase tracking-wide text-indigo-600 dark:text-indigo-400 mb-1">
+                    Optional Holiday Available
+                  </p>
+                  <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 mb-3 leading-relaxed">
+                    <span className="font-black">{detectedOptionalHolidays[0].name}</span> falls within your selected dates.
+                    You may choose to use your optional holiday quota instead of deducting a regular leave.
+                  </p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400">
+                      {new Date(detectedOptionalHolidays[0].date + 'T12:00:00').toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: '2-digit'
+                      })}
+                      {' '}— Optional Holiday
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setUseOptionalHoliday(prev => !prev)}
+                      className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all border
+                        ${
+                          useOptionalHoliday
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                            : 'bg-white dark:bg-slate-800 text-indigo-600 border-indigo-300 dark:border-indigo-700'
+                        }`}
+                    >
+                      {useOptionalHoliday ? 'Optional Applied' : 'Use Optional'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <section>
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 block">Category</label>
+              <div className="relative group">
+                <select
+                  value={formData.type}
+                  onChange={(e) => handleTypeChange(e.target.value as any)}
+                  className={inputBase}
+                >
+                  <option value="FULL">Full Day</option>
+                  <option value="HALF">Half Day</option>
+                  <option value="EARLY">Early Leave</option>
+                  <option value="LATE">Late Coming</option>
+                  <option value="WORK_FROM_HOME">Work From Home (WFH)</option>
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-indigo-500 transition-colors">
+                  <ChevronDown size={20} />
+                </div>
+              </div>
+            </section>
+
             {['HALF', 'EARLY', 'LATE'].includes(formData.type) && (
               <section className="p-4 sm:p-8 bg-slate-50 dark:bg-slate-800/40 rounded-2xl sm:rounded-[2rem] border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-300">
                 <div className="flex items-center gap-3 mb-5 sm:mb-6 text-indigo-600 dark:text-indigo-400 font-black text-xs uppercase tracking-widest">
@@ -966,7 +788,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
 
                 {formData.type === 'HALF' ? (
                   <div className="space-y-4 sm:space-y-6">
-                    {/* Slot buttons: stack on very small screens, 3-col on sm+ */}
                     <div className="grid grid-cols-3 gap-2 sm:gap-4">
                       {[
                         { id: 'FIRST_HALF', label: '1st Half', time: '10:00 - 02:30' },
@@ -1027,28 +848,6 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </section>
             )}
 
-            {/* ── Optional holiday banner ── */}
-            {formData.type === 'FULL' && detectedOptionalHolidays.length === 1 && !hasUsedApprovedOptional && (
-              <div className="flex items-start gap-3 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 animate-in slide-in-from-top-2 duration-200">
-                <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Sparkles className="w-4 h-4 text-indigo-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-wide text-indigo-600 dark:text-indigo-400 mb-1">Optional Holiday Available</p>
-                  <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 mb-2 leading-relaxed">
-                    <span className="font-black">{detectedOptionalHolidays[0].name}</span> falls on your selected date. This is an optional holiday — you can use your optional quota instead of your regular leave balance.
-                  </p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
-                    <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400">
-                      {new Date(formData.startDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit' })} — {detectedOptionalHolidays[0].name} (Optional)
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── Reason ── */}
             <section>
               <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-3 block">Justification</label>
               <textarea
@@ -1059,21 +858,20 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               />
             </section>
 
-            {/* ── Action buttons ── */}
             <div className="flex items-center gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800 pb-safe">
               <button
                 onClick={onCancel}
-                className="px-3 sm:px-8 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex-shrink-0 min-w-[64px]"
+                className="px-3 sm:px-8 py-4 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 transition-colors flex-shrink-0 min-w-[64px]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-4 sm:py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-2 sm:gap-3 shadow-none dark:shadow-none disabled:opacity-50"
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-4 sm:py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-2 sm:gap-3 disabled:opacity-50"
               >
                 {isSubmitting ? 'Processing...' : 'Submit'}
-                {!isSubmitting && <ChevronRight className="w-4 h-4 flex-shrink-0" />}
+                {!isSubmitting && <ChevronRight className="w-4 h-4 shrink-0" />}
               </button>
             </div>
 

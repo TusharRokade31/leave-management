@@ -541,14 +541,31 @@ function TaskOverviewCard({ label, count, icon, color, bg, onClick }: any) {
 
 function LogoutModal({ onCancel, onConfirm }: any) {
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 w-full max-sm rounded-[2.5rem] p-8 border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-none text-center animate-in zoom-in-95">
-        <div className="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6"><AlertTriangle size={32} /></div>
-        <h3 className="text-xl font-black uppercase tracking-widest mb-2 text-slate-800 dark:text-white">End Session?</h3>
-        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-8">Are you sure you want to sign out of the AlphaBeta portal?</p>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-sm">
+      {/* Changed w-full max-sm to max-w-sm to constrain the width properly */}
+      <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2.5rem] p-8 border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-none text-center animate-in zoom-in-95 duration-200">
+        <div className="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+          <AlertTriangle size={32} />
+        </div>
+        <h3 className="text-xl font-black uppercase tracking-widest mb-2 text-slate-800 dark:text-white">
+          End Session?
+        </h3>
+        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-8 leading-relaxed px-4">
+          Are you sure you want to sign out of the AlphaBeta portal?
+        </p>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-600 dark:text-slate-300">Wait, No</button>
-          <button onClick={onConfirm} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg dark:shadow-none active:scale-95 transition-all">Sign Out</button>
+          <button 
+            onClick={onCancel} 
+            className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-colors"
+          >
+            Wait, No
+          </button>
+          <button 
+            onClick={onConfirm} 
+            className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-200 dark:shadow-none active:scale-95 transition-all"
+          >
+            Sign Out
+          </button>
         </div>
       </div>
     </div>
