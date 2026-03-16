@@ -89,12 +89,12 @@ export async function POST(req: NextRequest) {
 
     // --- NOTIFICATION LOGIC ---
     try {
-      await sendLeaveNotification({
-        mode: 'NEW',
-        leave: leave,
-        employeeName: leave.user.name ?? 'Employee',
-        employeeEmail: leave.user.email
-      });
+      // await sendLeaveNotification({
+      //   mode: 'NEW',
+      //   leave: leave,
+      //   employeeName: leave.user.name ?? 'Employee',
+      //   employeeEmail: leave.user.email
+      // });
     } catch (emailErr) {
       console.error('Notification failed but leave was created:', emailErr);
     }
