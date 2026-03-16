@@ -87,8 +87,6 @@ export async function POST(req: NextRequest) {
                 status: newStatus,
                 completedAt: isTaskDone ? (t.completedAt ? new Date(t.completedAt) : new Date()) : null,
                 updatedAt: new Date()
-                // Note: History is usually handled by the dedicated status PATCH route,
-                // but we keep the structure consistent here.
               },
             });
           }
@@ -151,7 +149,8 @@ export async function GET(req: NextRequest) {
         }),
         prisma.leave.findMany({
           where: { userId: filterUserId, status: 'APPROVED' },
-          select: { id: true, startDate: true, endDate: true, type: true, status: true, reason: true }
+          // ✅ ENSURE OPTIONAL FIELDS ARE SELECTED
+          select: { id: true, startDate: true, endDate: true, type: true, status: true, reason: true, isOptional: true, holidayName: true }
         })
       ]);
 
@@ -214,7 +213,8 @@ export async function GET(req: NextRequest) {
         },
         leaves: {
           where: { status: 'APPROVED' },
-          select: { startDate: true, endDate: true, type: true, status: true, reason: true }
+          // ✅ ENSURE OPTIONAL FIELDS ARE SELECTED FOR MANAGER OVERVIEW
+          select: { startDate: true, endDate: true, type: true, status: true, reason: true, isOptional: true, holidayName: true }
         }
       },
       orderBy: { name: 'asc' },

@@ -55,32 +55,37 @@ export const useDashboardLeaves = (currentUser: User | null, currentDate: Date):
       const month = currentDate.getMonth() + 1;
       const year = currentDate.getFullYear();
 
-      let fetchedLeaves: Leave[];
-      if (currentUser.role === 'MANAGER') {
-        fetchedLeaves = await api.getAllDashboardLeaves(month, year);
-      } else {
-        fetchedLeaves = await api.getMyLeaves();
-      }
-      
-      // ✅ Fetch stats which now includes optionalUsed and holidayName from our API update
-      const fetchedStats = await api.getStats(month, year);
+      // ✅ Parallel Execution: Fetch both datasets at the same time to fix slow loading
+      const [fetchedLeaves, fetchedStats] = await Promise.all([
+        currentUser.role === 'MANAGER' 
+          ? api.getAllDashboardLeaves(month, year) 
+          : api.getMyLeaves(),
+        api.getStats(month, year)
+      ]);
 
-      // We maintain your manual check as a fallback, 
-      // but prioritize the data coming directly from the stats API
+      /**
+       * ✅ FIX: Strict Boolean Check
+       * We only look for leaves where isOptional is strictly true.
+       * Legacy leaves where the value is null or false will be ignored.
+       */
       const optionalHolidayRecord = fetchedLeaves.find(
-        (l) => l.isOptional && l.status !== 'REJECTED'
+        (l) => l.isOptional === true && l.status !== 'REJECTED'
       );
 
       setLeaves(fetchedLeaves);
       setStats({
         ...fetchedStats,
-        // ✅ Fix: Use the API value if it exists, otherwise fallback to the manual check
-        optionalUsed: fetchedStats.optionalUsed !== undefined ? fetchedStats.optionalUsed : !!optionalHolidayRecord,
+        /**
+         * ✅ FIX: Override Logic
+         * We prioritize the API value, but fallback to our strict boolean check.
+         * This prevents legacy date overlaps from triggering a "Used" state.
+         */
+        optionalUsed: fetchedStats.optionalUsed === true || !!optionalHolidayRecord,
         holidayName: fetchedStats.holidayName || optionalHolidayRecord?.holidayName || undefined
       });
 
     } catch (error) {
-      console.error('Failed to fetch leaves:', error);
+      console.error('Failed to fetch dashboard data:', error);
     } finally {
       setLoading(false);
     }

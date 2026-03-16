@@ -44,6 +44,7 @@ interface Leave {
   type: string;
   status: string;
   reason: string;
+  isOptional?: boolean; 
 }
 
 interface TaskData {
@@ -57,6 +58,21 @@ const fetcher = async (url: string) => {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error("Failed to fetch tasks");
   return res.json();
+};
+
+// Helper: returns true if date string d falls within the approved leave l
+const isDateInLeave = (d: string, l: any): boolean =>
+  l.status === 'APPROVED' &&
+  d >= format(new Date(l.startDate), "yyyy-MM-dd") &&
+  d <= format(new Date(l.endDate), "yyyy-MM-dd");
+
+// Helper: returns true if a leave is an optional holiday leave
+// Checks all possible field shapes the API might return
+const isOptionalLeave = (l: any): boolean => {
+  const byFlag = l.isOptional === true;
+  const byType = typeof l.type === 'string' && l.type.toUpperCase() === 'OPTIONAL';
+  const byHolidayName = typeof l.holidayName === 'string' && l.holidayName.trim() !== '';
+  return byFlag || byType || byHolidayName;
 };
 
 export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { viewOnly?: boolean; employeeId?: number }, ref) => {
@@ -119,12 +135,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
   const handleDayClick = (date: Date) => {
     const dateKey = format(date, "yyyy-MM-dd");
     const holiday = getHoliday(dateKey);
-    const approvedLeave = leaves.find((l: any) => {
-        const d = format(date, "yyyy-MM-dd");
-        const start = format(new Date(l.startDate), "yyyy-MM-dd");
-        const end = format(new Date(l.endDate), "yyyy-MM-dd");
-        return l.status === 'APPROVED' && d >= start && d <= end;
-    });
+    const approvedLeave = leaves.find((l: any) => isDateInLeave(dateKey, l));
 
     if (!viewOnly && isFutureDate(date) && !holiday && !approvedLeave) return;
 
@@ -190,7 +201,12 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
   const isSelectedToday = isSameDay(selectedDate, new Date());
   const selectedHoliday = getHoliday(format(selectedDate, "yyyy-MM-dd"));
   const isLoggingDisabled = selectedHoliday?.type === 'FIXED' && !selectedHoliday?.isHalfDay;
-  const isOptionalHolidayUsed = selectedHoliday?.type === 'OPTIONAL' && selectedLeave?.status === 'APPROVED';
+
+  // Fix: use .some() across ALL leaves for the selected date to detect optional holiday usage
+  // Previously used selectedLeave.isOptional which only checked the first matched leave
+  const selectedDateKey = format(selectedDate, "yyyy-MM-dd");
+  const isOptionalHolidayUsed = selectedHoliday?.type === 'OPTIONAL' &&
+    leaves.some((l: any) => isDateInLeave(selectedDateKey, l) && isOptionalLeave(l));
 
   return (
     <div className="relative w-full max-w-md mx-auto bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] sm:rounded-[2.5rem] p-4 sm:p-6 transition-colors duration-300 shadow-sm">
@@ -205,7 +221,6 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
         .ql-editor * { color: inherit !important; background-color: transparent !important; font-family: inherit !important; }
         .react-calendar { background: transparent; border: none; font-family: inherit; width: 100% !important; }
         
-        /* Fixed White Hover on Month Selector */
         .dark .react-calendar__navigation button:enabled:hover,
         .dark .react-calendar__navigation button:enabled:focus {
             background-color: #1e293b !important;
@@ -228,7 +243,6 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
         .task-missing { color: #ffffff !important; }
         .task-missing::before { background: #ef4444 !important; }
         
-        /* Sync Holiday Tiles for Dark Mode */
         .holiday-fixed::before { background: #94a3b8 !important; opacity: 0.4; }
         .holiday-fixed abbr { color: #475569 !important; font-style: italic; }
         .dark .holiday-fixed abbr { color: #94a3b8 !important; }
@@ -251,10 +265,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
             if (viewOnly) return false;
             const key = format(date, "yyyy-MM-dd");
             const holiday = getHoliday(key);
-            const approvedLeave = leaves.some((l: any) => {
-                const d = format(date, "yyyy-MM-dd");
-                return l.status === 'APPROVED' && d >= format(new Date(l.startDate), "yyyy-MM-dd") && d <= format(new Date(l.endDate), "yyyy-MM-dd");
-            });
+            const approvedLeave = leaves.some((l: any) => isDateInLeave(key, l));
             return isFutureDate(date) && !holiday && !approvedLeave;
           }}
           prev2Label={null}
@@ -264,19 +275,23 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
             const key = format(date, "yyyy-MM-dd");
             const taskData = tasks[key];
             const holiday = getHoliday(key); 
-            const approvedLeave = leaves.find((l: any) => {
-                const d = format(date, "yyyy-MM-dd");
-                return l.status === 'APPROVED' && d >= format(new Date(l.startDate), "yyyy-MM-dd") && d <= format(new Date(l.endDate), "yyyy-MM-dd");
-            });
+            // Any approved leave covering this date
+            const approvedLeave = leaves.find((l: any) => isDateInLeave(key, l));
+            // Fix: scan ALL leaves — any one may be the optional holiday leave
+            const optionalHolidayLeave = leaves.find((l: any) => isDateInLeave(key, l) && isOptionalLeave(l));
             
             const hasTask = taskData?.content && taskData.content !== '<p><br></p>';
             const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
+            const isToday = isSameDay(date, new Date());
             const classes: string[] = [];
             
-            if (isSameDay(date, new Date())) classes.push("tile-today-focus");
             if (hasTask) {
               classes.push("task-added");
-            } else if (holiday?.type === 'OPTIONAL' && approvedLeave) {
+            } else if (isToday) {
+              classes.push("tile-today-focus");
+            } else if (holiday?.type === 'OPTIONAL' && optionalHolidayLeave) {
+              // Fix: was checking approvedLeave.isOptional — missed cases where first matched
+              // leave was non-optional but another leave on same date was optional
               classes.push("holiday-optional-approved");
             } else if (approvedLeave) {
               classes.push("leave-approved");
@@ -290,11 +305,10 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
           formatDay={(locale, date) => {
              const key = format(date, "yyyy-MM-dd");
              const holiday = getHoliday(key);
-             const approvedLeave = leaves.some((l: any) => {
-                const d = format(date, "yyyy-MM-dd");
-                return l.status === 'APPROVED' && d >= format(new Date(l.startDate), "yyyy-MM-dd") && d <= format(new Date(l.endDate), "yyyy-MM-dd");
-             });
-             if (holiday?.type === 'OPTIONAL' && approvedLeave) return "OH";
+             // Fix: scan ALL leaves for optional holiday — first matched leave may not be optional
+             const optionalHolidayLeave = leaves.find((l: any) => isDateInLeave(key, l) && isOptionalLeave(l));
+             const approvedLeave = leaves.find((l: any) => isDateInLeave(key, l));
+             if (holiday?.type === 'OPTIONAL' && optionalHolidayLeave) return "OH";
              if (approvedLeave) return "L";
              if (holiday) return holiday.type === 'OPTIONAL' ? "OH" : "H";
              return date.getDate().toString();
@@ -323,7 +337,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                 <div className="min-w-0">
                   <h3 className="text-lg sm:text-2xl font-black tracking-tight truncate uppercase italic">{format(selectedDate, "EEEE, MMM dd")}</h3>
                   <p className="text-white/70 text-[10px] sm:text-xs font-black uppercase tracking-widest mt-1">
-                    {isOptionalHolidayUsed ? "Used Optional Holiday" : selectedHoliday ? `${selectedHoliday.type} Holiday: ${selectedHoliday.name}` : (selectedLeave ? `Approved Leave: ${selectedLeave.type}` : "Daily Record")}
+                    {isOptionalHolidayUsed ? "Used Optional Holiday" : selectedHoliday ? `${selectedHoliday.type} Holiday (${selectedHoliday.isHalfDay ? 'Half-Day' : 'Full-Day'}): ${selectedHoliday.name}` : (selectedLeave ? `Approved Leave: ${selectedLeave.type}` : "Daily Record")}
                   </p>
                 </div>
               </div>
@@ -348,7 +362,7 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                 <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in zoom-in-95 ${selectedHoliday.type === 'FIXED' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100' : 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100'}`}>
                   {selectedHoliday.type === 'FIXED' ? <Info className="text-blue-600 w-5 h-5" /> : <Sparkles className="text-indigo-600 w-5 h-5" />}
                   <p className={`text-[10px] font-black uppercase tracking-widest ${selectedHoliday.type === 'FIXED' ? 'text-blue-900 dark:text-blue-400' : 'text-indigo-900 dark:text-indigo-300'}`}>
-                    {selectedHoliday.type === 'FIXED' ? `Fixed Company Holiday: ${selectedHoliday.name}` : `Available Optional Occasion: ${selectedHoliday.name}`}
+                    {selectedHoliday.type === 'FIXED' ? `Fixed Company Holiday (${selectedHoliday.isHalfDay ? 'Half-Day' : 'Full-Day'}): ${selectedHoliday.name}` : `Available Optional Holiday: ${selectedHoliday.name}`}
                   </p>
                 </div>
               )}

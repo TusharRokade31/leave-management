@@ -232,6 +232,32 @@ export default function Home() {
     <div className="flex h-screen bg-[#F9F8F8] dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors duration-300">
       <ToastContainer position="top-right" autoClose={3000} limit={1} theme={isDarkMode ? "dark" : "light"} />
 
+      <style jsx global>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        .animate-shimmer {
+          position: relative;
+          overflow: hidden;
+        }
+        .animate-shimmer::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.2),
+            transparent
+          );
+          animation: shimmer 1.2s infinite;
+        }
+      `}</style>
+
       {isSidebarOpen && (
         <div className="lg:hidden fixed inset-0 bg-black/50 z-[100] backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />
       )}
@@ -311,7 +337,12 @@ export default function Home() {
 
             {activeTab === 'dashboard' && (
               <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500">
-                <StatsCards stats={leavedashboard.stats as any} role={currentUser.role as any} />
+                
+                {/* ✅ Only StatsCards show the fast shimmer effect during loading */}
+                <div className={`${leavedashboard.loading ? 'animate-shimmer opacity-80 pointer-events-none' : ''}`}>
+                  <StatsCards stats={leavedashboard.stats as any} role={currentUser.role as any} />
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
                   
                   {currentUser.role === "EMPLOYEE" && taskStats && (
@@ -367,78 +398,74 @@ export default function Home() {
               </div>
             )}
 
-           {activeTab === 'tasks' && (
-  <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-    {/* VIEW MODE TOGGLE */}
-    <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-2 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none flex max-w-sm mx-auto sm:mx-0">
-      <button 
-        onClick={() => setTaskViewMode('day')} 
-        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${taskViewMode === 'day' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-      >
-        <CalendarIcon size={14} /> Day Wise
-      </button>
-      <button 
-        onClick={() => setTaskViewMode('company')} 
-        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${taskViewMode === 'company' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-      >
-        <LayoutDashboard size={14} /> Company Wise
-      </button>
-    </div>
+            {activeTab === 'tasks' && (
+              <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-2 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none flex max-w-sm mx-auto sm:mx-0">
+                  <button 
+                    onClick={() => setTaskViewMode('day')} 
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${taskViewMode === 'day' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    <CalendarIcon size={14} /> Day Wise
+                  </button>
+                  <button 
+                    onClick={() => setTaskViewMode('company')} 
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${taskViewMode === 'company' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    <LayoutDashboard size={14} /> Company Wise
+                  </button>
+                </div>
 
-    {/* MAIN CONTENT CONTAINER */}
-    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none overflow-hidden min-h-[500px]">
-      
-      {/* HEADER: ONLY VISIBLE FOR EMPLOYEE IN DAY VIEW */}
-      {currentUser.role === 'EMPLOYEE' && taskViewMode === 'day' && (
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h3 className="font-black text-[10px] lg:text-xs uppercase tracking-widest italic underline decoration-indigo-500 decoration-4 underline-offset-8">
-            Task Records
-          </h3>
-          
-          <button 
-            onClick={() => calendarRef.current?.openToday()} 
-            className="w-full sm:w-auto px-6 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 dark:shadow-none"
-          >
-            Today
-          </button>
-        </div>
-      )}
+                <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none overflow-hidden min-h-[500px]">
+                  
+                  {currentUser.role === 'EMPLOYEE' && taskViewMode === 'day' && (
+                    <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <h3 className="font-black text-[10px] lg:text-xs uppercase tracking-widest italic underline decoration-indigo-500 decoration-4 underline-offset-8">
+                        Task Records
+                      </h3>
+                      
+                      <button 
+                        onClick={() => calendarRef.current?.openToday()} 
+                        className="w-full sm:w-auto px-6 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 dark:shadow-none"
+                      >
+                        Today
+                      </button>
+                    </div>
+                  )}
 
-      {/* RENDERED CONTENT */}
-      <div className="p-4 lg:p-6">
-        <div className={taskViewMode === 'company' ? "block" : "hidden"}>
-          <TaskManagement allTasks={allTasks} currentUser={currentUser} onUpdateStatus={updateStatus} />
-        </div>
-        
-        <div className={taskViewMode === 'day' ? "block" : "hidden"}>
-          {currentUser.role === 'MANAGER' ? (
-            workStatusLoading ? (
-              <div className="p-12 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">
-                Syncing Team Data...
+                  <div className="p-4 lg:p-6">
+                    <div className={taskViewMode === 'company' ? "block" : "hidden"}>
+                      <TaskManagement allTasks={allTasks} currentUser={currentUser} onUpdateStatus={updateStatus} />
+                    </div>
+                    
+                    <div className={taskViewMode === 'day' ? "block" : "hidden"}>
+                      {currentUser.role === 'MANAGER' ? (
+                        workStatusLoading ? (
+                          <div className="p-12 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">
+                            Syncing Team Data...
+                          </div>
+                        ) : (
+                          <EmployeeWorkStatusTable 
+                            employees={visibleEmployees as any} 
+                            companies={companies} 
+                            onSaveNewCompany={saveNewCompany} 
+                            hideCompany={hideCompany} 
+                            currentMonth={currentMonth} 
+                            onMonthChange={setCurrentMonth} 
+                            onUpdateFeedback={updateTaskFeedback} 
+                            onAssignTasks={addAssignedTasks} 
+                            onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
+                          />
+                        )
+                      ) : (
+                        <div className="p-2 flex justify-center">
+                          <EmployeeCalendar ref={calendarRef} employeeId={Number(currentUser.id)} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <EmployeeWorkStatusTable 
-                employees={visibleEmployees as any} 
-                companies={companies} 
-                onSaveNewCompany={saveNewCompany} 
-                hideCompany={hideCompany} 
-                currentMonth={currentMonth} 
-                onMonthChange={setCurrentMonth} 
-                onUpdateFeedback={updateTaskFeedback} 
-                onAssignTasks={addAssignedTasks} 
-                onUpdateDayLeaveStatus={handleUpdateDayLeaveStatus} 
-              />
-            )
-          ) : (
-            <div className="p-2 flex justify-center">
-              <EmployeeCalendar ref={calendarRef} employeeId={Number(currentUser.id)} />
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+            )}
 
             {activeTab === 'leaves' && (
               <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">

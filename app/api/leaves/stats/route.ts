@@ -16,37 +16,38 @@ export async function GET(req: NextRequest) {
     const year = searchParams.get('year');
 
     // --- 1. ROBUST OPTIONAL HOLIDAY CHECK ---
-    // Fetch all approved leaves for this user globally to verify annual quota usage
-    const allApprovedLeaves = await prisma.leave.findMany({
+    // Fetch leaves that are specifically marked as Optional Holiday.
+    // We include PENDING to ensure the user doesn't apply for multiple OHs at once.
+    const relevantOptionalLeaves = await prisma.leave.findMany({
       where: {
         ...baseWhere,
-        status: LeaveStatus.APPROVED,
+        status: { in: [LeaveStatus.APPROVED, LeaveStatus.PENDING] },
+        isOptional: true, // ✅ CRITICAL: Strictly ignores legacy leaves where this is false/null
       },
       select: {
         startDate: true,
-        endDate: true
+        endDate: true,
+        isOptional: true,
+        holidayName: true
       }
     });
 
     let optionalUsed = false;
     let holidayName = "";
-    let optionalHolidayDate = ""; // ✅ Added to track the specific date
+    let optionalHolidayDate = ""; 
 
-    // Extract optional holidays from your holiday data configuration
     const optionalHolidays = HOLIDAY_DATA.filter(h => h.type === 'OPTIONAL');
 
-    // Helper: Standardizes any date input to a local YYYY-MM-DD string
     const toCleanDateString = (dateInput: Date | string) => {
       const d = new Date(dateInput);
-      return d.toLocaleDateString('en-CA'); // Outputs "YYYY-MM-DD" reliably
+      return d.toLocaleDateString('en-CA'); 
     };
 
-    // Iterate through approved leaves to find a match in the holiday range
-    for (const leave of allApprovedLeaves) {
+    // Iterate only through leaves explicitly flagged as Optional
+    for (const leave of relevantOptionalLeaves) {
       const startStr = toCleanDateString(leave.startDate);
       const endStr = toCleanDateString(leave.endDate);
       
-      // Match the holiday date against the leave range (start <= holiday <= end)
       const usedHoliday = optionalHolidays.find(h => {
         return h.date >= startStr && h.date <= endStr;
       });
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
       if (usedHoliday) {
         optionalUsed = true;
         holidayName = usedHoliday.name;
-        optionalHolidayDate = usedHoliday.date; // ✅ Capture the date
+        optionalHolidayDate = usedHoliday.date; 
         break; 
       }
     }
@@ -80,6 +81,7 @@ export async function GET(req: NextRequest) {
       ...dateFilter
     };
 
+    // Dashboard usually counts standard leaves (Sick, Casual, etc.) separately from WFH
     const leaveWhere = { 
       ...commonWhere, 
       type: { not: LeaveType.WORK_FROM_HOME } 
@@ -91,7 +93,6 @@ export async function GET(req: NextRequest) {
       status: LeaveStatus.APPROVED 
     };
 
-    // Parallel count execution
     const [total, pending, approved, rejected, wfh] = await Promise.all([
       prisma.leave.count({ where: leaveWhere }),
       prisma.leave.count({ where: { ...leaveWhere, status: LeaveStatus.PENDING } }),
@@ -106,7 +107,6 @@ export async function GET(req: NextRequest) {
       approved: approved.toString(),
       rejected: rejected.toString(),
       wfh: wfh.toString(),
-      // ✅ Return the date to the frontend
       optionalUsed,
       holidayName,
       optionalHolidayDate 
