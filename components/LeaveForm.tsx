@@ -7,13 +7,80 @@ import "react-calendar/dist/Calendar.css";
 import { LeaveFormData } from '@/type/form';
 import { toast } from 'react-toastify';
 import { getHoliday, findOptionalInStates } from '@/lib/holidays';
-import { format, isSameDay, isBefore, startOfDay, parseISO } from "date-fns";
+import { isBefore, startOfDay } from "date-fns";
 
 interface LeaveFormProps {
   onSubmit: (formData: LeaveFormData) => Promise<void>;
   onCancel: () => void;
   existingLeaves: any[];
 }
+
+// ── Placed OUTSIDE LeaveForm so it never remounts on parent re-render ────────
+interface OhBannerProps {
+  color: 'amber' | 'red' | 'indigo';
+  label: string;
+  date: string;
+  name: string;
+  useOptionalHoliday: boolean;
+  onToggle: () => void;
+}
+
+const OhBanner: React.FC<OhBannerProps> = ({ color, label, date, name, useOptionalHoliday, onToggle }) => {
+  const palettes = {
+    amber: {
+      wrap:   'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+      icon:   'bg-amber-100 dark:bg-amber-900/40',
+      spark:  'text-amber-500',
+      title:  'text-amber-600 dark:text-amber-400',
+      sub:    'text-amber-700 dark:text-amber-300',
+      btnOn:  'bg-amber-500 text-white border-amber-500',
+      btnOff: 'bg-white dark:bg-slate-800 text-amber-600 border-amber-300 dark:border-amber-700',
+    },
+    red: {
+      wrap:   'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+      icon:   'bg-red-100 dark:bg-red-900/40',
+      spark:  'text-red-500',
+      title:  'text-red-600 dark:text-red-400',
+      sub:    'text-red-700 dark:text-red-300',
+      btnOn:  'bg-red-600 text-white border-red-600',
+      btnOff: 'bg-white dark:bg-slate-800 text-red-600 border-red-300 dark:border-red-700',
+    },
+    indigo: {
+      wrap:   'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800',
+      icon:   'bg-indigo-100 dark:bg-indigo-900/40',
+      spark:  'text-indigo-500',
+      title:  'text-indigo-600 dark:text-indigo-400',
+      sub:    'text-indigo-700 dark:text-indigo-300',
+      btnOn:  'bg-indigo-600 text-white border-indigo-600',
+      btnOff: 'bg-white dark:bg-slate-800 text-indigo-600 border-indigo-300 dark:border-indigo-700',
+    },
+  };
+  const p = palettes[color];
+  const fmtDate = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+
+  return (
+    <div className={`flex items-center justify-between gap-3 p-3.5 rounded-2xl border ${p.wrap}`}>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 ${p.icon}`}>
+          <Sparkles className={`w-3.5 h-3.5 ${p.spark}`} />
+        </div>
+        <div className="min-w-0">
+          <p className={`text-[9px] font-black uppercase tracking-widest ${p.title}`}>{label}</p>
+          <p className={`text-[11px] font-bold truncate ${p.sub}`}>{fmtDate} — {name}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`flex-shrink-0 px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all border
+          ${useOptionalHoliday ? `${p.btnOn} shadow-sm` : p.btnOff}`}
+      >
+        {useOptionalHoliday ? 'Applied ✓' : 'Use OH'}
+      </button>
+    </div>
+  );
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existingLeaves }) => {
   const [formData, setFormData] = useState<LeaveFormData>({
@@ -27,14 +94,14 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
   });
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [useOptionalHoliday, setUseOptionalHoliday] = useState(false); // 1️⃣ Manual toggle state
-
+  const [useOptionalHoliday, setUseOptionalHoliday] = useState(false);
   const [clickStage, setClickStage] = useState<'start' | 'end'>('start');
   const [blockedHoliday, setBlockedHoliday] = useState<string | null>(null);
   const [blockedLeaveDate, setBlockedLeaveDate] = useState<string | null>(null);
   const [fixedHolidaysInRange, setFixedHolidaysInRange] = useState<{ date: string; name: string; isHalfDay?: boolean }[]>([]);
   const [clickedOptionalHoliday, setClickedOptionalHoliday] = useState<{ date: string; name: string } | null>(null);
   const [hoveredTooltip, setHoveredTooltip] = useState<{ name: string; x: number; y: number } | null>(null);
+  const [clickTooltip, setClickTooltip] = useState<{ name: string; x: number; y: number } | null>(null);
   const calendarRef = React.useRef<HTMLElement>(null);
 
   const scrollToCalendar = () => {
@@ -49,10 +116,35 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
       if (!rawDate) return false;
       const [y] = rawDate.split('-').map(Number);
       const isThisYear = y === currentYear;
-      const isApproved = l.status?.toUpperCase() === 'APPROVED' || l.status?.toUpperCase() === 'PENDING';
-      if (!isThisYear || !isApproved) return false;
-      return l.isOptional === true;
+      const isOptional = l.isOptional === true;
+      const status = l.status?.toUpperCase();
+      const isLocked = status === 'APPROVED' || status === 'PENDING';
+      return isThisYear && isOptional && isLocked;
     });
+  }, [existingLeaves]);
+
+  // ── details of the approved/pending OH leave (for the "already used" banner) ──
+  const approvedOptionalLeave = useMemo(() => {
+    if (!existingLeaves || !Array.isArray(existingLeaves)) return null;
+    const currentYear = new Date().getFullYear();
+    const found = existingLeaves.find(l => {
+      const rawDate = l.startDate ? String(l.startDate).slice(0, 10) : null;
+      if (!rawDate) return false;
+      const [y] = rawDate.split('-').map(Number);
+      const isThisYear = y === currentYear;
+      const isOptional = l.isOptional === true;
+      const status = l.status?.toUpperCase();
+      const isLocked = status === 'APPROVED' || status === 'PENDING';
+      return isThisYear && isOptional && isLocked;
+    });
+    if (!found) return null;
+    const date = String(found.startDate).slice(0, 10);
+    const holiday = getHoliday(date);
+    return {
+      date,
+      name: found.holidayName || holiday?.name || 'Optional Holiday',
+      status: found.status?.toUpperCase() as 'APPROVED' | 'PENDING',
+    };
   }, [existingLeaves]);
 
   const stringToDate = (dateStr: string): Date | null => {
@@ -84,18 +176,44 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     return result;
   };
 
+  const isDateInExistingLeave = (key: string): boolean => {
+    if (!existingLeaves || !Array.isArray(existingLeaves)) return false;
+    return existingLeaves.some(l => {
+      const status = l.status?.toUpperCase();
+      if (status !== 'APPROVED' && status !== 'PENDING') return false;
+      if (!l.startDate || !l.endDate) return false;
+      const lStart = stringToDate(String(l.startDate).slice(0, 10));
+      const lEnd   = stringToDate(String(l.endDate).slice(0, 10));
+      if (!lStart || !lEnd) return false;
+      const tileD = stringToDate(key)!;
+      return tileD >= lStart && tileD <= lEnd;
+    });
+  };
+
   const handleDayClick = (date: Date) => {
-    setUseOptionalHoliday(false); // 2️⃣ Reset optional usage when user changes date
+    setUseOptionalHoliday(false);
     const isSingleDayMode = ['HALF', 'EARLY', 'LATE'].includes(formData.type);
     const key = dateToString(date);
     const today = startOfDay(new Date());
     const clickedDay = startOfDay(date);
-
     const holiday = getHoliday(key);
 
     if (isBefore(clickedDay, today)) return;
 
-    const isOptionalHolidayDate = holiday?.type === 'OPTIONAL';
+    if (holiday) {
+      setTimeout(() => {
+        const btn = document.querySelector(
+          `.leave-form-calendar button[aria-label*="${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}"]`
+        ) as HTMLElement | null;
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          setClickTooltip({ name: holiday.name, x: rect.left + rect.width / 2, y: rect.top });
+          setTimeout(() => setClickTooltip(null), 2000);
+        }
+      }, 0);
+    }
+
+    const isOptionalHolidayDate = holiday?.type === 'OPTIONAL' && !hasUsedApprovedOptional;
     if (approvedLeaveDates.has(key) && !isOptionalHolidayDate) {
       setBlockedLeaveDate(key);
       setBlockedHoliday(null);
@@ -113,18 +231,19 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     }
 
     if (holiday?.type === 'FIXED' && holiday.isHalfDay) {
-      setBlockedHoliday(null);
-      setClickedOptionalHoliday(null);
-      setFixedHolidaysInRange([{ date: key, name: holiday.name, isHalfDay: true }]);
-    } else if (holiday?.type === 'OPTIONAL') {
-      setBlockedHoliday(null);
-      setFixedHolidaysInRange([]);
-      setClickedOptionalHoliday({ date: key, name: holiday.name });
-    } else {
-      setBlockedHoliday(null);
-      setFixedHolidaysInRange([]);
-      setClickedOptionalHoliday(null);
-    }
+  setBlockedHoliday(null);
+  setClickedOptionalHoliday(null);
+  setFixedHolidaysInRange([{ date: key, name: holiday.name, isHalfDay: true }]);
+} else if (holiday?.type === 'OPTIONAL') {
+  // Always capture — whether quota used or not — so banner can show on click
+  setBlockedHoliday(null);
+  setFixedHolidaysInRange([]);
+  setClickedOptionalHoliday({ date: key, name: holiday.name });
+} else {
+  setBlockedHoliday(null);
+  setFixedHolidaysInRange([]);
+  setClickedOptionalHoliday(null);
+}
 
     if (isSingleDayMode) {
       setFormData(prev => ({ ...prev, startDate: key, endDate: key }));
@@ -183,18 +302,54 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
         const d = String(cur.getDate()).padStart(2, '0');
         const key = `${y}-${m}-${d}`;
         const h = getHoliday(key);
-        if (h?.type !== 'OPTIONAL') {
-          s.add(key);
-        }
+        if (h?.type !== 'OPTIONAL') s.add(key);
       }
     });
     return s;
   }, [existingLeaves]);
 
+  // ── set of OH dates that are approved/pending (to keep tile notation) ──────
+  const approvedOhDates = useMemo((): Set<string> => {
+  const s = new Set<string>();
+  if (!existingLeaves || !Array.isArray(existingLeaves)) return s;
+  const today = dateToString(new Date());
+  existingLeaves.forEach(l => {
+    if (l.isOptional !== true) return;
+    const status = l.status?.toUpperCase();
+    if (status !== 'APPROVED' && status !== 'PENDING') return;
+    if (!l.startDate) return;
+    const key = String(l.startDate).slice(0, 10);
+    // Only mark the actual OH date — don't affect future OH tiles
+    if (key <= today) s.add(key);
+    else s.add(key); // still mark it so the specific date tile shows red
+  });
+  return s;
+}, [existingLeaves]);
+
+  const ohInSelectedRange = useMemo(() => {
+    if (hasUsedApprovedOptional) return null;
+    if (!formData.startDate || !formData.endDate) return null;
+    if (formData.type !== 'FULL') return null;
+    if (formData.startDate === formData.endDate) return null;
+    const results = findOptionalInStates(formData.startDate, formData.endDate);
+    return results.length === 1 ? results[0] : null;
+  }, [formData.startDate, formData.endDate, formData.type, hasUsedApprovedOptional]);
+
+  const ohOnSingleInExistingRange = useMemo(() => {
+    if (hasUsedApprovedOptional) return null;
+    if (!formData.startDate) return null;
+    if (formData.startDate !== formData.endDate) return null;
+    const holiday = getHoliday(formData.startDate);
+    if (holiday?.type !== 'OPTIONAL') return null;
+    if (!isDateInExistingLeave(formData.startDate)) return null;
+    return { date: formData.startDate, name: holiday.name };
+  }, [formData.startDate, formData.endDate, existingLeaves, hasUsedApprovedOptional]);
+
   const detectedOptionalHolidays = useMemo(() => {
+    if (hasUsedApprovedOptional) return [];
     if (!formData.startDate || !formData.endDate) return [];
     return findOptionalInStates(formData.startDate, formData.endDate);
-  }, [formData.startDate, formData.endDate]);
+  }, [formData.startDate, formData.endDate, hasUsedApprovedOptional]);
 
   const startHoliday = useMemo(() => {
     return formData.startDate ? getHoliday(formData.startDate) : null;
@@ -266,12 +421,11 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
     try {
       const submitData = {
         ...finalData,
-        // 3️⃣ Updated submit logic to respect toggle
         isOptional:
+          !hasUsedApprovedOptional &&
           useOptionalHoliday &&
           detectedOptionalHolidays.length === 1 &&
-          formData.type === 'FULL' &&
-          !hasUsedApprovedOptional,
+          formData.type === 'FULL',
         holidayName:
           useOptionalHoliday &&
           detectedOptionalHolidays.length === 1 &&
@@ -305,17 +459,11 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
           button:focus, select:focus, input:focus { outline: none !important; }
 
           .leave-form-calendar {
-            width: 100% !important;
-            max-width: 380px !important;
-            margin: 0 auto !important;
-            background: transparent !important;
-            border: none !important;
-            font-family: inherit !important;
-            box-sizing: border-box !important;
+            width: 100% !important; max-width: 380px !important; margin: 0 auto !important;
+            background: transparent !important; border: none !important;
+            font-family: inherit !important; box-sizing: border-box !important;
           }
-          @media (max-width: 639px) {
-            .leave-form-calendar { max-width: 100% !important; }
-          }
+          @media (max-width: 639px) { .leave-form-calendar { max-width: 100% !important; } }
           .leave-form-calendar .react-calendar__navigation__prev2-button,
           .leave-form-calendar .react-calendar__navigation__next2-button { display: none !important; }
           .leave-form-calendar .react-calendar__navigation {
@@ -325,7 +473,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
           .leave-form-calendar .react-calendar__navigation button {
             background: transparent !important; border: none !important; color: #6366f1 !important;
             font-weight: 800 !important; font-size: 13px !important; min-width: 32px !important;
-            padding: 6px 8px !important; border-radius: 8px !important; transition: background 0.15s !important; line-height: 1 !important;
+            padding: 6px 8px !important; border-radius: 8px !important;
+            transition: background 0.15s !important; line-height: 1 !important;
           }
           .leave-form-calendar .react-calendar__navigation button:hover { background: rgba(99,102,241,0.12) !important; }
           .leave-form-calendar .react-calendar__navigation__label {
@@ -405,29 +554,48 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
             border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important;
           }
           .leave-form-calendar .react-calendar__tile--rangeStart.react-calendar__tile--rangeEnd { border-radius: 8px !important; }
+
+          /* ── Fixed holiday tile ── */
           .leave-form-calendar .tile-holiday-fixed:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
             background: rgba(148,163,184,0.08) !important; border-color: rgba(148,163,184,0.3) !important;
           }
           .dark .leave-form-calendar .tile-holiday-fixed:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
             background: rgba(100,116,139,0.12) !important;
           }
+
+          /* ── Optional holiday — available (blue dashed) ── */
           .leave-form-calendar .tile-holiday-optional:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(59,130,246,0.06) !important; border-color: #3b82f6 !important; border-style: dashed !important;
+            background: rgba(59,130,246,0.06) !important; border: 1.5px dashed #3b82f6 !important;
           }
           .dark .leave-form-calendar .tile-holiday-optional:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(59,130,246,0.1) !important; border-color: #60a5fa !important; border-style: dashed !important;
+            background: rgba(59,130,246,0.1) !important; border: 1.5px dashed #60a5fa !important;
           }
-          .leave-form-calendar .tile-holiday-optional-used:not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(239,68,68,0.07) !important; border-color: #ef4444 !important; border-style: dashed !important;
+
+          /* ── Optional holiday — approved/used (red dashed, always shown) ── */
+          .leave-form-calendar .tile-oh-approved:not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
+            background: rgba(239,68,68,0.07) !important; border: 1.5px dashed #ef4444 !important;
           }
-          .dark .leave-form-calendar .tile-holiday-optional-used:not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
-            background: rgba(239,68,68,0.12) !important; border-color: #f87171 !important; border-style: dashed !important;
+          .dark .leave-form-calendar .tile-oh-approved:not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
+            background: rgba(239,68,68,0.12) !important; border: 1.5px dashed #f87171 !important;
           }
-          .leave-form-calendar .tile-holiday-optional-used abbr { display: none !important; }
-          .leave-form-calendar .tile-holiday-optional-used .holiday-badge { color: #ef4444 !important; }
-          .dark .leave-form-calendar .tile-holiday-optional-used .holiday-badge { color: #f87171 !important; }
-          .leave-form-calendar .react-calendar__tile--past.tile-holiday-optional-used .holiday-badge { color: #fca5a5 !important; }
-          .dark .leave-form-calendar .react-calendar__tile--past.tile-holiday-optional-used .holiday-badge { color: #7f1d1d !important; }
+          .leave-form-calendar .tile-oh-approved abbr { display: none !important; }
+          .leave-form-calendar .tile-oh-approved .holiday-badge { color: #ef4444 !important; }
+          .dark .leave-form-calendar .tile-oh-approved .holiday-badge { color: #f87171 !important; }
+          .leave-form-calendar .react-calendar__tile--past.tile-oh-approved .holiday-badge { color: #fca5a5 !important; }
+          .dark .leave-form-calendar .react-calendar__tile--past.tile-oh-approved .holiday-badge { color: #7f1d1d !important; }
+
+          /* ── OH inside current leave range — red dashed ── */
+          .leave-form-calendar .tile-oh-in-range:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
+            background: rgba(239,68,68,0.08) !important; border: 1.5px dashed #ef4444 !important;
+          }
+          .dark .leave-form-calendar .tile-oh-in-range:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
+            background: rgba(239,68,68,0.14) !important; border: 1.5px dashed #f87171 !important;
+          }
+          .leave-form-calendar .tile-oh-in-range abbr { display: none !important; }
+          .leave-form-calendar .tile-oh-in-range .holiday-badge { color: #ef4444 !important; }
+          .dark .leave-form-calendar .tile-oh-in-range .holiday-badge { color: #f87171 !important; }
+
+          /* ── Leave date tile ── */
           .leave-form-calendar .tile-has-leave:not(.react-calendar__tile--past):not(.react-calendar__tile--active):not(.react-calendar__tile--rangeStart):not(.react-calendar__tile--rangeEnd) {
             background: rgba(239,68,68,0.08) !important; border-color: rgba(239,68,68,0.4) !important;
           }
@@ -438,8 +606,13 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
           .dark .leave-form-calendar .tile-has-leave abbr { color: #f87171 !important; }
           .leave-form-calendar .react-calendar__tile--past.tile-has-leave abbr { color: #fca5a5 !important; }
           .dark .leave-form-calendar .react-calendar__tile--past.tile-has-leave abbr { color: #7f1d1d !important; }
+
+          /* Hide abbr for badge-only tiles */
           .leave-form-calendar .tile-holiday-fixed abbr,
-          .leave-form-calendar .tile-holiday-optional abbr { display: none !important; }
+          .leave-form-calendar .tile-holiday-optional abbr,
+          .leave-form-calendar .tile-oh-in-range abbr { display: none !important; }
+
+          /* ── Holiday badge ── */
           .leave-form-calendar .react-calendar__tile .holiday-badge {
             position: absolute !important; inset: 0 !important; display: flex !important;
             align-items: center !important; justify-content: center !important;
@@ -449,6 +622,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
           .leave-form-calendar .tile-holiday-fixed .holiday-badge { color: #94a3b8 !important; }
           .leave-form-calendar .tile-holiday-optional .holiday-badge { color: #3b82f6 !important; }
           .dark .leave-form-calendar .tile-holiday-optional .holiday-badge { color: #60a5fa !important; }
+          .leave-form-calendar .tile-oh-in-range .holiday-badge { color: #ef4444 !important; }
+          .dark .leave-form-calendar .tile-oh-in-range .holiday-badge { color: #f87171 !important; }
           .leave-form-calendar .react-calendar__tile--active .holiday-badge,
           .leave-form-calendar .react-calendar__tile--rangeStart .holiday-badge,
           .leave-form-calendar .react-calendar__tile--rangeEnd .holiday-badge { color: rgba(255,255,255,0.95) !important; }
@@ -457,6 +632,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
           .leave-form-calendar .react-calendar__tile--past .holiday-badge { color: #cbd5e1 !important; }
           .dark .leave-form-calendar .react-calendar__tile--past .holiday-badge { color: #334155 !important; }
           .leave-form-calendar .react-calendar__tile .holiday-name-tooltip { display: none !important; }
+
+          /* ── Tooltip ── */
           .leave-form-calendar-tooltip {
             position: fixed; background: #1e293b; color: #f1f5f9; padding: 5px 10px;
             border-radius: 8px; font-size: 10px; font-weight: 700; max-width: 160px;
@@ -468,6 +645,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
             content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
             border: 5px solid transparent; border-top-color: #1e293b;
           }
+
+          /* ── Responsive ── */
           @media (max-width: 374px) {
             .leave-form-calendar .react-calendar__tile { font-size: 9px !important; min-height: 34px !important; border-radius: 5px !important; }
             .leave-form-calendar .react-calendar__tile abbr { font-size: 9px !important; }
@@ -497,16 +676,19 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
         `}</style>
 
         {hoveredTooltip && (
-          <div
-            className="leave-form-calendar-tooltip hidden sm:block"
-            style={{ left: hoveredTooltip.x, top: hoveredTooltip.y }}
-          >
+          <div className="leave-form-calendar-tooltip hidden sm:block" style={{ left: hoveredTooltip.x, top: hoveredTooltip.y }}>
             {hoveredTooltip.name}
+          </div>
+        )}
+        {clickTooltip && !hoveredTooltip && (
+          <div className="leave-form-calendar-tooltip" style={{ left: clickTooltip.x, top: clickTooltip.y }}>
+            {clickTooltip.name}
           </div>
         )}
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-none sm:rounded-[2.5rem] overflow-hidden shadow-sm min-h-screen sm:min-h-0">
 
+          {/* ── Header ── */}
           <div className="px-4 sm:px-8 py-5 sm:py-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 z-10 bg-white dark:bg-slate-900">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg dark:shadow-none flex-shrink-0">
@@ -527,6 +709,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
 
           <div className="p-4 sm:p-8 space-y-6 sm:space-y-10">
 
+            {/* ── Calendar ── */}
             <section ref={calendarRef} className="bg-slate-50 dark:bg-slate-800/30 p-3 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2 mb-4 sm:mb-6 text-indigo-600 dark:text-indigo-400">
                 <CalendarIcon size={15} />
@@ -544,56 +727,121 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                 }
                 className="leave-form-calendar"
                 tileClassName={({ date }) => {
-                  const key = dateToString(date);
-                  const holiday = getHoliday(key);
-                  if (holiday?.type === 'FIXED') return 'tile-holiday-fixed';
-                  if (holiday?.type === 'OPTIONAL') {
-                    return leaveDates.has(key) ? 'tile-holiday-optional-used' : 'tile-holiday-optional';
-                  }
-                  if (leaveDates.has(key)) return 'tile-has-leave';
-                  return '';
-                }}
+  const key = dateToString(date);
+  const holiday = getHoliday(key);
+
+  if (holiday?.type === 'FIXED') return 'tile-holiday-fixed';
+
+  if (holiday?.type === 'OPTIONAL') {
+    // Only the exact approved OH date stays red dashed
+    if (approvedOhDates.has(key)) return 'tile-oh-approved';
+
+    // Quota used → ALL other future OH tiles get no styling at all
+    if (hasUsedApprovedOptional) {
+      if (leaveDates.has(key)) return 'tile-has-leave';
+      return '';
+    }
+
+    const isInNewRange =
+      formData.startDate &&
+      formData.endDate &&
+      formData.startDate !== formData.endDate &&
+      (() => {
+        const startD = stringToDate(formData.startDate)!;
+        const endD   = stringToDate(formData.endDate)!;
+        const tileD  = stringToDate(key)!;
+        return tileD >= startD && tileD <= endD;
+      })();
+
+    const isInExistingLeave = isDateInExistingLeave(key);
+    if (isInNewRange || isInExistingLeave) return 'tile-oh-in-range';
+    return 'tile-holiday-optional';
+  }
+
+  if (leaveDates.has(key)) return 'tile-has-leave';
+  return '';
+}}
                 tileContent={({ date }) => {
-                  const key = dateToString(date);
-                  const holiday = getHoliday(key);
-                  if (!holiday) return null;
-                  const label = holiday.type === 'FIXED' ? 'H' : 'OH';
-                  return (
-                    <span
-                      className="holiday-badge"
-                      onMouseEnter={(e) => {
-                        const rect = (e.currentTarget as HTMLElement).closest('button')?.getBoundingClientRect();
-                        if (rect) setHoveredTooltip({ name: holiday.name, x: rect.left + rect.width / 2, y: rect.top });
-                      }}
-                      onMouseLeave={() => setHoveredTooltip(null)}
-                    >
-                      {label}
-                    </span>
-                  );
-                }}
+  const key = dateToString(date);
+  const holiday = getHoliday(key);
+  if (!holiday) return null;
+
+  if (holiday.type === 'FIXED') {
+    return (
+      <span
+        className="holiday-badge"
+        onMouseEnter={(e) => {
+          const rect = (e.currentTarget as HTMLElement).closest('button')?.getBoundingClientRect();
+          if (rect) setHoveredTooltip({ name: holiday.name, x: rect.left + rect.width / 2, y: rect.top });
+        }}
+        onMouseLeave={() => setHoveredTooltip(null)}
+      >H</span>
+    );
+  }
+
+  if (holiday.type === 'OPTIONAL') {
+    // Always show badge on the exact approved OH date
+    if (approvedOhDates.has(key)) {
+      return (
+        <span
+          className="holiday-badge"
+          onMouseEnter={(e) => {
+            const rect = (e.currentTarget as HTMLElement).closest('button')?.getBoundingClientRect();
+            if (rect) setHoveredTooltip({ name: holiday.name, x: rect.left + rect.width / 2, y: rect.top });
+          }}
+          onMouseLeave={() => setHoveredTooltip(null)}
+        >OH</span>
+      );
+    }
+    // Quota used → no badge on any other OH tile
+    if (hasUsedApprovedOptional) return null;
+    return (
+      <span
+        className="holiday-badge"
+        onMouseEnter={(e) => {
+          const rect = (e.currentTarget as HTMLElement).closest('button')?.getBoundingClientRect();
+          if (rect) setHoveredTooltip({ name: holiday.name, x: rect.left + rect.width / 2, y: rect.top });
+        }}
+        onMouseLeave={() => setHoveredTooltip(null)}
+      >OH</span>
+    );
+  }
+
+  return null;
+}}
                 onClickDay={(date) => handleDayClick(date)}
               />
 
+              {/* Legend */}
               <div className="mt-3 flex flex-col items-center gap-2">
                 <div className="flex gap-3 justify-center flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-slate-400 flex-shrink-0"></span>
                     <span className="text-[9px] font-bold text-slate-400 uppercase">Fixed (H)</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" style={{outline: '1.5px dashed #3b82f6', outlineOffset: '1px'}}></span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">Optional (OH)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" style={{outline: '1.5px dashed #ef4444', outlineOffset: '1px'}}></span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">OH Used</span>
-                  </div>
+                  {!hasUsedApprovedOptional && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" style={{outline: '1.5px dashed #3b82f6', outlineOffset: '1px'}}></span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Optional (OH)</span>
+                    </div>
+                  )}
+                  {!hasUsedApprovedOptional && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" style={{outline: '1.5px dashed #ef4444', outlineOffset: '1px'}}></span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">OH in Range</span>
+                    </div>
+                  )}
+                  {hasUsedApprovedOptional && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" style={{outline: '1.5px dashed #ef4444', outlineOffset: '1px'}}></span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">OH Used</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0"></span>
                     <span className="text-[9px] font-bold text-slate-400 uppercase">On Leave</span>
                   </div>
                 </div>
-
                 {!['HALF', 'EARLY', 'LATE'].includes(formData.type) && (
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">
                     {clickStage === 'start' ? '1st click sets start date' : '2nd click sets end date'}
@@ -602,6 +850,28 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             </section>
 
+            {/* ── OH already used — shown only when user clicks that OH tile ── */}
+{hasUsedApprovedOptional && clickedOptionalHoliday && approvedOptionalLeave && (
+  <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-in slide-in-from-top-2 duration-200">
+    <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+      <X className="w-4 h-4 text-red-500" />
+    </div>
+    <div>
+      <p className="text-xs font-black uppercase tracking-wide text-red-600 dark:text-red-400 mb-0.5">
+        Optional Holiday {approvedOptionalLeave.status === 'APPROVED' ? 'Already Used' : 'Request Pending'}
+      </p>
+      <p className="text-sm font-bold text-red-700 dark:text-red-300">
+        <span className="font-black">{clickedOptionalHoliday.name}</span> on{' '}
+        <span className="font-black">
+          {new Date(clickedOptionalHoliday.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        </span>{' '}
+        has been {approvedOptionalLeave.status === 'APPROVED' ? 'approved' : 'submitted for approval'}. Your optional holiday quota for this year is exhausted.
+      </p>
+    </div>
+  </div>
+)}
+
+            {/* ── Blocked: existing leave ── */}
             {blockedLeaveDate && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-in slide-in-from-top-2 duration-200">
                 <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -610,12 +880,15 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                 <div>
                   <p className="text-xs font-black uppercase tracking-wide text-red-600 dark:text-red-400 mb-0.5">Leave Already Applied</p>
                   <p className="text-sm font-bold text-red-700 dark:text-red-300">
-                    You already have an approved or pending leave on <span className="font-black">{new Date(blockedLeaveDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>. Please select a different date.
+                    You already have an approved or pending leave on{' '}
+                    <span className="font-black">{new Date(blockedLeaveDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>.
+                    Please select a different date.
                   </p>
                 </div>
               </div>
             )}
 
+            {/* ── Blocked: fixed holiday ── */}
             {blockedHoliday && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-in slide-in-from-top-2 duration-200">
                 <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -630,6 +903,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             )}
 
+            {/* ── Fixed holiday(s) in range ── */}
             {fixedHolidaysInRange.length > 0 && !blockedHoliday && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 animate-in slide-in-from-top-2 duration-200">
                 <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -663,7 +937,8 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             )}
 
-            {clickedOptionalHoliday && (
+            {/* ── Clicked a single OH date not inside existing leave ── */}
+            {!hasUsedApprovedOptional && clickedOptionalHoliday && !ohOnSingleInExistingRange && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 animate-in slide-in-from-top-2 duration-200">
                 <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Sparkles className="w-4 h-4 text-indigo-500" />
@@ -683,6 +958,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             )}
 
+            {/* ── Date pickers ── */}
             <section className="flex flex-col sm:flex-row gap-3 sm:gap-6 w-full">
               <div className="flex-1 min-w-0">
                 <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">Start Date</label>
@@ -692,9 +968,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                   className={`${inputBase} flex items-center justify-between cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all text-left w-full`}
                 >
                   <span className={`truncate ${formData.startDate ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500 font-normal'}`}>
-                    {formData.startDate
-                      ? new Date(formData.startDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-                      : 'Tap to select'}
+                    {formData.startDate ? new Date(formData.startDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : 'Tap to select'}
                   </span>
                   <CalendarIcon className="text-indigo-400 w-5 h-5 flex-shrink-0 ml-2" />
                 </button>
@@ -708,9 +982,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                     className={`${inputBase} flex items-center justify-between cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all text-left w-full`}
                   >
                     <span className={`truncate ${formData.endDate ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500 font-normal'}`}>
-                      {formData.endDate
-                        ? new Date(formData.endDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-                        : 'Tap to select'}
+                      {formData.endDate ? new Date(formData.endDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : 'Tap to select'}
                     </span>
                     <CalendarIcon className="text-indigo-400 w-5 h-5 flex-shrink-0 ml-2" />
                   </button>
@@ -718,47 +990,47 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               )}
             </section>
 
-            {/* ── Optional Holiday Quota Banner (Restored) ── */}
-            {formData.type === 'FULL' &&
-             detectedOptionalHolidays.length === 1 &&
-             !hasUsedApprovedOptional && (
-              <div className="flex items-start gap-3 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 animate-in slide-in-from-top-2 duration-200">
-                <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Sparkles className="w-4 h-4 text-indigo-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black uppercase tracking-wide text-indigo-600 dark:text-indigo-400 mb-1">
-                    Optional Holiday Available
-                  </p>
-                  <p className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 mb-3 leading-relaxed">
-                    <span className="font-black">{detectedOptionalHolidays[0].name}</span> falls within your selected dates.
-                    You may choose to use your optional holiday quota instead of deducting a regular leave.
-                  </p>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400">
-                      {new Date(detectedOptionalHolidays[0].date + 'T12:00:00').toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: '2-digit'
-                      })}
-                      {' '}— Optional Holiday
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setUseOptionalHoliday(prev => !prev)}
-                      className={`px-3 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all border
-                        ${
-                          useOptionalHoliday
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
-                            : 'bg-white dark:bg-slate-800 text-indigo-600 border-indigo-300 dark:border-indigo-700'
-                        }`}
-                    >
-                      {useOptionalHoliday ? 'Optional Applied' : 'Use Optional'}
-                    </button>
-                  </div>
-                </div>
-              </div>
+            {/* ── OH single-date inside existing leave — amber compact banner ── */}
+            {!hasUsedApprovedOptional && formData.type === 'FULL' && ohOnSingleInExistingRange !== null && (
+              <OhBanner
+                color="amber"
+                label="Optional Holiday in Existing Leave"
+                date={ohOnSingleInExistingRange.date}
+                name={ohOnSingleInExistingRange.name}
+                useOptionalHoliday={useOptionalHoliday}
+                onToggle={() => setUseOptionalHoliday(prev => !prev)}
+              />
             )}
 
+            {/* ── OH in new multi-day range — red compact banner ── */}
+            {!hasUsedApprovedOptional && formData.type === 'FULL' && ohInSelectedRange !== null && (
+              <OhBanner
+                color="red"
+                label="Optional Holiday in Selected Range"
+                date={ohInSelectedRange.date}
+                name={ohInSelectedRange.name}
+                useOptionalHoliday={useOptionalHoliday}
+                onToggle={() => setUseOptionalHoliday(prev => !prev)}
+              />
+            )}
+
+            {/* ── Pure single-day OH, not in any existing leave — blue compact banner ── */}
+            {!hasUsedApprovedOptional &&
+              formData.type === 'FULL' &&
+              detectedOptionalHolidays.length === 1 &&
+              ohInSelectedRange === null &&
+              ohOnSingleInExistingRange === null && (
+              <OhBanner
+                color="indigo"
+                label="Optional Holiday Available"
+                date={detectedOptionalHolidays[0].date}
+                name={detectedOptionalHolidays[0].name}
+                useOptionalHoliday={useOptionalHoliday}
+                onToggle={() => setUseOptionalHoliday(prev => !prev)}
+              />
+            )}
+
+            {/* ── Category ── */}
             <section>
               <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 block">Category</label>
               <div className="relative group">
@@ -779,13 +1051,13 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               </div>
             </section>
 
+            {/* ── Time pickers (HALF / EARLY / LATE) ── */}
             {['HALF', 'EARLY', 'LATE'].includes(formData.type) && (
               <section className="p-4 sm:p-8 bg-slate-50 dark:bg-slate-800/40 rounded-2xl sm:rounded-[2rem] border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-300">
                 <div className="flex items-center gap-3 mb-5 sm:mb-6 text-indigo-600 dark:text-indigo-400 font-black text-xs uppercase tracking-widest">
                   <Clock size={16} />
                   <span>Applying For</span>
                 </div>
-
                 {formData.type === 'HALF' ? (
                   <div className="space-y-4 sm:space-y-6">
                     <div className="grid grid-cols-3 gap-2 sm:gap-4">
@@ -813,21 +1085,11 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                       <div className="grid grid-cols-2 gap-3 sm:gap-4 animate-in slide-in-from-top-2">
                         <div className="space-y-1">
                           <span className="text-[9px] font-bold text-slate-400 uppercase ml-2">Start Time</span>
-                          <input
-                            type="time"
-                            value={formData.startTime}
-                            onChange={(e) => setFormData(p => ({ ...p, startTime: e.target.value }))}
-                            className={inputBase}
-                          />
+                          <input type="time" value={formData.startTime} onChange={(e) => setFormData(p => ({ ...p, startTime: e.target.value }))} className={inputBase} />
                         </div>
                         <div className="space-y-1">
                           <span className="text-[9px] font-bold text-slate-400 uppercase ml-2">End Time</span>
-                          <input
-                            type="time"
-                            value={formData.endTime}
-                            onChange={(e) => setFormData(p => ({ ...p, endTime: e.target.value }))}
-                            className={inputBase}
-                          />
+                          <input type="time" value={formData.endTime} onChange={(e) => setFormData(p => ({ ...p, endTime: e.target.value }))} className={inputBase} />
                         </div>
                       </div>
                     )}
@@ -837,17 +1099,13 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">
                       {formData.type === 'EARLY' ? 'Estimated Leaving time' : 'Estimated Arrival time'}
                     </label>
-                    <input
-                      type="time"
-                      value={formData.startTime}
-                      onChange={(e) => setFormData(p => ({ ...p, startTime: e.target.value }))}
-                      className={inputBase}
-                    />
+                    <input type="time" value={formData.startTime} onChange={(e) => setFormData(p => ({ ...p, startTime: e.target.value }))} className={inputBase} />
                   </div>
                 )}
               </section>
             )}
 
+            {/* ── Justification ── */}
             <section>
               <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-3 block">Justification</label>
               <textarea
@@ -858,6 +1116,7 @@ export const LeaveForm: React.FC<LeaveFormProps> = ({ onSubmit, onCancel, existi
               />
             </section>
 
+            {/* ── Actions ── */}
             <div className="flex items-center gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800 pb-safe">
               <button
                 onClick={onCancel}

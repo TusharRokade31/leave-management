@@ -35,6 +35,7 @@ interface Leave {
   endDate: string;
   startTime?: string | null;
   endTime?: string | null;
+  slot?: string | null;
   reason: string;
   type: string;
   days: number;
@@ -94,24 +95,44 @@ const to12hr = (t: string | null | undefined): string => {
   return `${h}:${mStr} ${ampm}`;
 };
 
+// ── Fixed: use slot field as source of truth; fallback to startTime for legacy ──
 const getHalfLabel = (leave: Leave): string => {
   if (leave.type !== 'HALF') return '';
+  if (leave.slot === 'FIRST_HALF')  return '1st Half';
+  if (leave.slot === 'SECOND_HALF') return '2nd Half';
+  if (leave.slot === 'CUSTOM')      return 'Custom';
+  // legacy fallback — records before slot field was stored
   const t = normaliseTime(leave.startTime);
   if (t === '10:00') return '1st Half';
-  if (t === '14:00') return '2nd Half';
-  return 'Half';
+  if (t === '14:30') return '2nd Half';
+  return 'Half Day';
 };
 
+// ── Fixed: slot-based fixed times; EARLY/LATE always use startTime ──────────
 const getShiftDetails = (
   leave: Leave
 ): { label: string; time: string; singleTime: boolean } | null => {
   switch (leave.type) {
-    case 'HALF':
-      return { label: getHalfLabel(leave), time: `${to12hr(leave.startTime)} → ${to12hr(leave.endTime)}`, singleTime: false };
+    case 'HALF': {
+      if (leave.slot === 'FIRST_HALF')
+        return { label: '1st Half', time: '10:00 AM → 2:30 PM', singleTime: false };
+      if (leave.slot === 'SECOND_HALF')
+        return { label: '2nd Half', time: '2:30 PM → 7:00 PM', singleTime: false };
+      if (leave.slot === 'CUSTOM' && leave.startTime && leave.endTime)
+        return { label: 'Custom', time: `${to12hr(leave.startTime)} → ${to12hr(leave.endTime)}`, singleTime: false };
+      // legacy records without slot
+      if (leave.startTime)
+        return { label: getHalfLabel(leave), time: `${to12hr(leave.startTime)} → ${to12hr(leave.endTime)}`, singleTime: false };
+      return { label: 'Half Day', time: '--', singleTime: true };
+    }
     case 'EARLY':
-      return { label: 'Early Leave', time: to12hr(leave.startTime), singleTime: true };
+      return leave.startTime
+        ? { label: 'Early Leave', time: `By ${to12hr(leave.startTime)}`, singleTime: true }
+        : null;
     case 'LATE':
-      return { label: 'Late Arrival', time: to12hr(leave.startTime), singleTime: true };
+      return leave.startTime
+        ? { label: 'Late Arrival', time: `By ${to12hr(leave.startTime)}`, singleTime: true }
+        : null;
     case 'WORK_FROM_HOME':
       return { label: 'WFH', time: 'Full Day', singleTime: true };
     default:
