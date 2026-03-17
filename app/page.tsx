@@ -338,7 +338,6 @@ export default function Home() {
             {activeTab === 'dashboard' && (
               <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500">
                 
-                {/* ✅ Only StatsCards show the fast shimmer effect during loading */}
                 <div className={`${leavedashboard.loading ? 'animate-shimmer opacity-80 pointer-events-none' : ''}`}>
                   <StatsCards stats={leavedashboard.stats as any} role={currentUser.role as any} />
                 </div>
@@ -373,13 +372,13 @@ export default function Home() {
                             <span className="text-xl font-black text-indigo-600">{managerNotifications.length}</span>
                           </div>
                           <button onClick={() => setActiveTab('leaves')} className="py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 flex items-center justify-center gap-3 transition-all active:scale-95">
-                             Manage Team Leaves <ArrowRight size={16} />
+                               Manage Team Leaves <ArrowRight size={16} />
                           </button>
                         </>
                       ) : (
                         <div className="grid grid-cols-1 gap-4">
                           <button onClick={openFreshDailyLog} className="py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 flex items-center justify-center gap-3 transition-all active:scale-95">
-                             Register Daily Log <Plus size={16} />
+                               Register Daily Log <Plus size={16} />
                           </button>
                           
                           <div className="p-1 rounded-[1.6rem] bg-gradient-to-r from-indigo-500/20 to-transparent">
@@ -432,12 +431,13 @@ export default function Home() {
                     </div>
                   )}
 
+                  {/* CHANGED: Removed justify-start flex wrapper to stop inner centering logic */}
                   <div className="p-4 lg:p-6">
-                    <div className={taskViewMode === 'company' ? "block" : "hidden"}>
+                    <div className={taskViewMode === 'company' ? "w-full" : "hidden"}>
                       <TaskManagement allTasks={allTasks} currentUser={currentUser} onUpdateStatus={updateStatus} />
                     </div>
                     
-                    <div className={taskViewMode === 'day' ? "block" : "hidden"}>
+                    <div className={taskViewMode === 'day' ? "w-full" : "hidden"}>
                       {currentUser.role === 'MANAGER' ? (
                         workStatusLoading ? (
                           <div className="p-12 text-center text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">
@@ -457,7 +457,8 @@ export default function Home() {
                           />
                         )
                       ) : (
-                        <div className="p-2 flex justify-center">
+                        /* CHANGED: Simple div wrapper, the component handles its own ml-0 */
+                        <div className="p-2">
                           <EmployeeCalendar ref={calendarRef} employeeId={Number(currentUser.id)} />
                         </div>
                       )}
@@ -542,7 +543,6 @@ function TaskOverviewCard({ label, count, icon, color, bg, onClick }: any) {
 function LogoutModal({ onCancel, onConfirm }: any) {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-sm">
-      {/* Changed w-full max-sm to max-w-sm to constrain the width properly */}
       <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2.5rem] p-8 border border-slate-200 dark:border-slate-800 shadow-2xl dark:shadow-none text-center animate-in zoom-in-95 duration-200">
         <div className="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
           <AlertTriangle size={32} />

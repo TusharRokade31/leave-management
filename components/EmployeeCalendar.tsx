@@ -10,6 +10,7 @@ import { canEditDate, isFutureDate } from "@/utils/date";
 import { getHoliday } from "@/lib/holidays"; 
 import useSWR from "swr";
 import dynamic from 'next/dynamic';
+import MonthOverview from "@/components/MonthOverview";
 
 const ReactQuill = dynamic(() => import('react-quill'), { 
   ssr: false,
@@ -60,14 +61,11 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 
-// Helper: returns true if date string d falls within the approved leave l
 const isDateInLeave = (d: string, l: any): boolean =>
   l.status === 'APPROVED' &&
   d >= format(new Date(l.startDate), "yyyy-MM-dd") &&
   d <= format(new Date(l.endDate), "yyyy-MM-dd");
 
-// Helper: returns true if a leave is an optional holiday leave
-// Checks all possible field shapes the API might return
 const isOptionalLeave = (l: any): boolean => {
   const byFlag = l.isOptional === true;
   const byType = typeof l.type === 'string' && l.type.toUpperCase() === 'OPTIONAL';
@@ -77,6 +75,8 @@ const isOptionalLeave = (l: any): boolean => {
 
 export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { viewOnly?: boolean; employeeId?: number }, ref) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // Added state to track currently viewed month for the overview component
+  const [activeStartDate, setActiveStartDate] = useState<Date>(new Date());
   const [showModal, setShowModal] = useState(false);
   const [currentPointers, setCurrentPointers] = useState("");
   const [currentComment, setCurrentComment] = useState("");
@@ -202,135 +202,236 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
   const selectedHoliday = getHoliday(format(selectedDate, "yyyy-MM-dd"));
   const isLoggingDisabled = selectedHoliday?.type === 'FIXED' && !selectedHoliday?.isHalfDay;
 
-  // Fix: use .some() across ALL leaves for the selected date to detect optional holiday usage
-  // Previously used selectedLeave.isOptional which only checked the first matched leave
   const selectedDateKey = format(selectedDate, "yyyy-MM-dd");
   const isOptionalHolidayUsed = selectedHoliday?.type === 'OPTIONAL' &&
     leaves.some((l: any) => isDateInLeave(selectedDateKey, l) && isOptionalLeave(l));
 
   return (
-    <div className="relative w-full max-w-md mx-auto bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] sm:rounded-[2.5rem] p-4 sm:p-6 transition-colors duration-300 shadow-sm">
-      
-      {isValidating && (
-        <div className="absolute top-4 right-4 z-10">
-          <RefreshCcw size={16} className="animate-spin text-indigo-500 opacity-60" />
-        </div>
-      )}
+    <div className="flex flex-col lg:flex-row gap-6 items-stretch w-full max-w-7xl mx-auto p-2 sm:p-4">
+      {/* LEFT SIDE: CALENDAR */}
+      <div className="relative w-full lg:w-1/2 min-w-0 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-[1.5rem] sm:rounded-[2.5rem] p-4 sm:p-6 transition-colors duration-300 shadow-sm overflow-hidden">
+        {isValidating && (
+          <div className="absolute top-4 right-4 z-10">
+            <RefreshCcw size={16} className="animate-spin text-indigo-500 opacity-60" />
+          </div>
+        )}
 
-      <style jsx global>{`
-        .ql-editor * { color: inherit !important; background-color: transparent !important; font-family: inherit !important; }
-        .react-calendar { background: transparent; border: none; font-family: inherit; width: 100% !important; }
-        
-        .dark .react-calendar__navigation button:enabled:hover,
-        .dark .react-calendar__navigation button:enabled:focus {
+        <style jsx global>{`
+          .ql-editor * { color: inherit !important; background-color: transparent !important; font-family: inherit !important; }
+
+          /* ── Calendar base ── */
+          .react-calendar { background: transparent; border: none; font-family: inherit; width: 100% !important; max-width: 100% !important; box-sizing: border-box; }
+
+          /* ── Navigation: constrain width, never overflow ── */
+          .react-calendar__navigation {
+            display: flex !important;
+            align-items: center !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            gap: 2px !important;
+            margin-bottom: 8px !important;
+          }
+          .react-calendar__navigation button {
+            flex: 0 0 auto !important;
+            min-width: 32px !important;
+            max-width: 40px !important;
+            padding: 6px 4px !important;
+            font-size: clamp(10px, 2.2vw, 14px) !important;
+            background: transparent !important;
+            border: none !important;
+            border-radius: 8px !important;
+            cursor: pointer !important;
+          }
+          .react-calendar__navigation__label {
+            flex: 1 1 0% !important;
+            min-width: 0 !important;
+            text-align: center !important;
+            font-weight: 800 !important;
+            font-size: clamp(11px, 2.8vw, 15px) !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            padding: 0 2px !important;
+          }
+          .dark .react-calendar__navigation button:enabled:hover,
+          .dark .react-calendar__navigation button:enabled:focus {
             background-color: #1e293b !important;
-        }
+          }
+          .dark .react-calendar__navigation button { color: #f8fafc !important; }
 
-        .react-calendar__tile { position: relative !important; aspect-ratio: 1 / 1 !important; border-radius: 12px !important; margin: 4px 0; font-weight: 700; color: #1e293b; display: flex !important; align-items: center !important; justify-content: center !important; overflow: visible !important; background: transparent !important; z-index: 0; }
-        .dark .react-calendar__tile { color: #f8fafc; }
-        .dark .react-calendar__navigation button { color: #f8fafc !important; }
-        .react-calendar__tile abbr { position: relative !important; z-index: 3 !important; pointer-events: none; color: inherit; }
-        .react-calendar__tile::before { content: ''; position: absolute; inset: 0; border-radius: 10px; z-index: 1; background: transparent; transition: background 0.15s ease; }
-        
-        .tile-today-focus { color: #2563eb !important; }
-        .tile-today-focus::before { background: #ffffff !important; border: 2px solid #2563eb !important; border-radius: 10px; }
-        .dark .tile-today-focus { color: #3b82f6 !important; }
-        .dark .tile-today-focus::before { background: #0f172a !important; border: 2px solid #3b82f6 !important; }
-        
-        .task-added { color: #ffffff !important; }
-        .task-added::before { background: #2563eb !important; }
-        
-        .task-missing { color: #ffffff !important; }
-        .task-missing::before { background: #ef4444 !important; }
-        
-        .holiday-fixed::before { background: #94a3b8 !important; opacity: 0.4; }
-        .holiday-fixed abbr { color: #475569 !important; font-style: italic; }
-        .dark .holiday-fixed abbr { color: #94a3b8 !important; }
+          /* ── Month grid ── */
+          .react-calendar__month-view { width: 100% !important; }
+          .react-calendar__month-view__days { display: grid !important; grid-template-columns: repeat(7, 1fr) !important; width: 100% !important; }
+          .react-calendar__month-view__weekdays { display: grid !important; grid-template-columns: repeat(7, 1fr) !important; width: 100% !important; }
+          .react-calendar__month-view__weekdays__weekday { text-align: center !important; font-size: clamp(7px, 1.6vw, 11px) !important; overflow: hidden !important; }
+          .react-calendar__month-view__weekdays__weekday abbr { text-decoration: none !important; }
 
-        .holiday-optional-approved::before { border: 2px dashed #ef4444 !important; background: rgba(239, 68, 68, 0.05) !important; }
-        .holiday-optional-approved abbr { color: #ef4444 !important; }
-        
-        .holiday-optional::before { border: 1.5px dashed #6366f1 !important; background: rgba(99, 102, 241, 0.05) !important; }
-        .holiday-optional abbr { color: #6366f1 !important; }
-        .dark .holiday-optional abbr { color: #818cf8 !important; }
+          /* ── Tiles ── */
+          .react-calendar__tile {
+            position: relative !important;
+            aspect-ratio: 1 / 1 !important;
+            border-radius: 12px !important;
+            margin: 2px 0 !important;
+            font-weight: 700;
+            color: #1e293b;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            overflow: visible !important;
+            background: transparent !important;
+            z-index: 0;
+            min-width: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+          }
+          .dark .react-calendar__tile { color: #f8fafc; }
+          .react-calendar__tile abbr {
+            position: relative !important;
+            z-index: 3 !important;
+            pointer-events: none;
+            color: inherit;
+            font-size: clamp(9px, 2vw, 13px);
+          }
+          .react-calendar__tile::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 10px;
+            z-index: 1;
+            background: transparent;
+            transition: background 0.15s ease;
+          }
 
-        .leave-approved::before { background: #ef4444 !important; }
-        .leave-approved { color: #ffffff !important; }
-      `}</style>
+          /* ── Tile states ── */
+          .tile-today-focus { color: #2563eb !important; }
+          .tile-today-focus::before { background: #ffffff !important; border: 2px solid #2563eb !important; border-radius: 10px; }
+          .dark .tile-today-focus { color: #3b82f6 !important; }
+          .dark .tile-today-focus::before { background: #0f172a !important; border: 2px solid #3b82f6 !important; }
 
-      <div className="flex justify-center overflow-hidden">
-        <Calendar
-          onClickDay={handleDayClick}
-          tileDisabled={({ date }) => {
-            if (viewOnly) return false;
-            const key = format(date, "yyyy-MM-dd");
-            const holiday = getHoliday(key);
-            const approvedLeave = leaves.some((l: any) => isDateInLeave(key, l));
-            return isFutureDate(date) && !holiday && !approvedLeave;
-          }}
-          prev2Label={null}
-          next2Label={null}
-          tileClassName={({ date, view }) => {
-            if (view !== "month") return "";
-            const key = format(date, "yyyy-MM-dd");
-            const taskData = tasks[key];
-            const holiday = getHoliday(key); 
-            // Any approved leave covering this date
-            const approvedLeave = leaves.find((l: any) => isDateInLeave(key, l));
-            // Fix: scan ALL leaves — any one may be the optional holiday leave
-            const optionalHolidayLeave = leaves.find((l: any) => isDateInLeave(key, l) && isOptionalLeave(l));
-            
-            const hasTask = taskData?.content && taskData.content !== '<p><br></p>';
-            const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
-            const isToday = isSameDay(date, new Date());
-            const classes: string[] = [];
-            
-            if (hasTask) {
-              classes.push("task-added");
-            } else if (isToday) {
-              classes.push("tile-today-focus");
-            } else if (holiday?.type === 'OPTIONAL' && optionalHolidayLeave) {
-              // Fix: was checking approvedLeave.isOptional — missed cases where first matched
-              // leave was non-optional but another leave on same date was optional
-              classes.push("holiday-optional-approved");
-            } else if (approvedLeave) {
-              classes.push("leave-approved");
-            } else if (holiday) {
-              classes.push(holiday.type === 'FIXED' ? "holiday-fixed" : "holiday-optional");
-            } else if (isPast && !viewOnly && Object.keys(tasks).length > 0) {
-              classes.push("task-missing");
-            }
-            return classes.join(" ");
-          }}
-          formatDay={(locale, date) => {
-             const key = format(date, "yyyy-MM-dd");
-             const holiday = getHoliday(key);
-             // Fix: scan ALL leaves for optional holiday — first matched leave may not be optional
-             const optionalHolidayLeave = leaves.find((l: any) => isDateInLeave(key, l) && isOptionalLeave(l));
-             const approvedLeave = leaves.find((l: any) => isDateInLeave(key, l));
-             if (holiday?.type === 'OPTIONAL' && optionalHolidayLeave) return "OH";
-             if (approvedLeave) return "L";
-             if (holiday) return holiday.type === 'OPTIONAL' ? "OH" : "H";
-             return date.getDate().toString();
-          }}
-          className="minimal-white-calendar-wide"
-        />
+          .task-added { color: #ffffff !important; }
+          .task-added::before { background: #2563eb !important; }
+
+          .task-missing { color: #ffffff !important; }
+          .task-missing::before { background: #ef4444 !important; }
+
+          .holiday-fixed::before { background: #94a3b8 !important; opacity: 0.4; }
+          .holiday-fixed abbr { color: #475569 !important; font-style: italic; }
+          .dark .holiday-fixed abbr { color: #94a3b8 !important; }
+
+          .holiday-optional-approved::before { border: 2px dashed #ef4444 !important; background: rgba(239, 68, 68, 0.05) !important; }
+          .holiday-optional-approved abbr { color: #ef4444 !important; }
+
+          .holiday-optional::before { border: 1.5px dashed #6366f1 !important; background: rgba(99, 102, 241, 0.05) !important; }
+          .holiday-optional abbr { color: #6366f1 !important; }
+          .dark .holiday-optional abbr { color: #818cf8 !important; }
+
+          /* ── Leave: border only, bg transparent, show date ── */
+          .leave-approved::before {
+            background: transparent !important;
+            border: 2px solid #ef4444 !important;
+            border-radius: 10px !important;
+          }
+          .leave-approved abbr { color: #ef4444 !important; }
+          .dark .leave-approved abbr { color: #f87171 !important; }
+
+          /* ── Thin scrollbar utility ── */
+          .scrollbar-thin { scrollbar-width: thin; }
+          .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+          .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+          .scrollbar-thin::-webkit-scrollbar-thumb { border-radius: 99px; background: #c7d2fe; }
+          .dark .scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; }
+          .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #a5b4fc; }
+          .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        `}</style>
+
+        <div className="flex justify-center w-full overflow-hidden">
+          <Calendar
+            onClickDay={handleDayClick}
+            onActiveStartDateChange={({ activeStartDate }) => setActiveStartDate(activeStartDate || new Date())}
+            tileDisabled={({ date }) => {
+              if (viewOnly) return false;
+              const key = format(date, "yyyy-MM-dd");
+              const holiday = getHoliday(key);
+              const approvedLeave = leaves.some((l: any) => isDateInLeave(key, l));
+              return isFutureDate(date) && !holiday && !approvedLeave;
+            }}
+            prev2Label={null}
+            next2Label={null}
+            tileClassName={({ date, view }) => {
+              if (view !== "month") return "";
+              const key = format(date, "yyyy-MM-dd");
+              const taskData = tasks[key];
+              const holiday = getHoliday(key); 
+              const approvedLeave = leaves.find((l: any) => isDateInLeave(key, l));
+              const optionalHolidayLeave = leaves.find((l: any) => isDateInLeave(key, l) && isOptionalLeave(l));
+              
+              const hasTask = taskData?.content && taskData.content !== '<p><br></p>';
+              const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
+              const isToday = isSameDay(date, new Date());
+              const classes: string[] = [];
+              
+              if (hasTask) {
+                classes.push("task-added");
+              } else if (isToday) {
+                classes.push("tile-today-focus");
+              } else if (holiday?.type === 'OPTIONAL' && optionalHolidayLeave) {
+                classes.push("holiday-optional-approved");
+              } else if (approvedLeave) {
+                classes.push("leave-approved");
+              } else if (holiday) {
+                classes.push(holiday.type === 'FIXED' ? "holiday-fixed" : "holiday-optional");
+              } else if (isPast && !viewOnly && Object.keys(tasks).length > 0) {
+                classes.push("task-missing");
+              }
+              return classes.join(" ");
+            }}
+            formatDay={(locale, date) => {
+               const key = format(date, "yyyy-MM-dd");
+               const holiday = getHoliday(key);
+               const optionalHolidayLeave = leaves.find((l: any) => isDateInLeave(key, l) && isOptionalLeave(l));
+               // approvedLeave: show actual date number (not "L")
+               if (holiday?.type === 'OPTIONAL' && optionalHolidayLeave) return "OH";
+               if (holiday) return holiday.type === 'OPTIONAL' ? "OH" : "H";
+               return date.getDate().toString();
+            }}
+            className="minimal-white-calendar-wide"
+          />
+        </div>
+
+        <div className="mt-8 flex flex-wrap justify-start gap-x-4 sm:gap-x-6 gap-y-3 border-t border-gray-100 dark:border-slate-800 pt-6">
+          <Legend color="bg-blue-600" label="Logged" isFilled />
+          <Legend color="bg-red-500" label="Missing" isFilled />
+          <Legend color="border-red-500 border-2" label="Leave" />
+          <Legend color="bg-slate-400 opacity-50" label="Holiday" isFilled />
+          <Legend color="border-indigo-500 border-dashed border-2" label="Optional" />
+        </div>
       </div>
 
-      <div className="mt-8 flex flex-wrap justify-center gap-x-4 sm:gap-x-6 gap-y-3 border-t border-gray-100 dark:border-slate-800 pt-6">
-        <Legend color="bg-blue-600" label="Logged" isFilled />
-        <Legend color="bg-red-500" label="Missing/Leave" isFilled />
-        <Legend color="bg-slate-400 opacity-50" label="Holiday" isFilled />
-        <Legend color="border-indigo-500 border-dashed border-2" label="Optional" />
+      {/* RIGHT SIDE: MONTH OVERVIEW */}
+      <div className="w-full lg:w-1/2 min-w-0 flex">
+        <MonthOverview 
+          tasks={tasks} 
+          leaves={leaves} 
+          currentMonth={activeStartDate} 
+        />
       </div>
 
       {showModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setShowModal(false)} />
-          <div className="relative bg-white dark:bg-slate-900 w-full max-w-7xl rounded-[1.5rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/20 flex flex-col max-h-[95vh] sm:max-h-[92vh]">
+          {/*
+            Mobile: modal is a tall flex column that scrolls as ONE unit (overflow-y-auto).
+            Desktop (lg): modal is fixed height (max-h), header never scrolls, body fills remaining space
+                          and the inner grid columns each scroll independently (overflow-hidden on wrapper,
+                          overflow-y-auto on each column panel).
+          */}
+          <div className="relative bg-white dark:bg-slate-900 w-full max-w-7xl rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl border border-white/20 flex flex-col
+            overflow-y-auto max-h-[95vh]
+            lg:overflow-hidden lg:max-h-[92vh]">
             
-            <div className={`p-4 sm:p-8 text-white flex-shrink-0 flex items-center justify-between transition-colors duration-500 ${isOptionalHolidayUsed ? "bg-red-600" : isMissingTask ? "bg-red-600" : isLoggingDisabled ? "bg-slate-600" : "bg-indigo-600"}`}>
-              <div className="flex items-center gap-3 sm:gap-5">
+            {/* Sticky header on mobile too so date is always visible */}
+            <div className={`p-4 sm:p-8 text-white flex-shrink-0 flex items-center justify-between transition-colors duration-500 sticky top-0 z-10 ${isOptionalHolidayUsed ? "bg-red-600" : isMissingTask ? "bg-red-600" : isLoggingDisabled ? "bg-slate-600" : "bg-indigo-600"}`}>
+              <div className="flex items-center gap-3 sm:gap-5 min-w-0">
                 <div className="w-10 h-10 sm:w-14 sm:h-14 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center border border-white/30 shrink-0">
                   <CalendarIcon className="w-5 h-5 sm:w-7 sm:h-7" />
                 </div>
@@ -341,13 +442,17 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                   </p>
                 </div>
               </div>
-              <button onClick={() => setShowModal(false)} className="p-2 bg-black/10 hover:bg-black/20 rounded-xl transition-all cursor-pointer"><X /></button>
+              <button onClick={() => setShowModal(false)} className="p-2 bg-black/10 hover:bg-black/20 rounded-xl transition-all cursor-pointer shrink-0 ml-2"><X /></button>
             </div>
             
-            <div className="p-4 sm:p-8 overflow-y-auto flex-1 scrollbar-hide">
-              
+            {/*
+              Mobile: this div has no overflow constraint — content stacks and the outer modal scrolls.
+              Desktop: flex-1 + min-h-0 + overflow-hidden so the grid fills the remaining space
+                       and each column controls its own scroll.
+            */}
+            <div className="p-4 sm:p-8 flex flex-col lg:flex-1 lg:min-h-0 lg:overflow-hidden">
               {isOptionalHolidayUsed && (
-                <div className="mb-6 p-5 rounded-[1.5rem] bg-red-50 border-2 border-red-200 dark:bg-red-950/20 dark:border-red-900/50 flex items-center gap-4 animate-in slide-in-from-top-4">
+                <div className="mb-4 p-5 rounded-[1.5rem] bg-red-50 border-2 border-red-200 dark:bg-red-950/20 dark:border-red-900/50 flex items-center gap-4 animate-in slide-in-from-top-4 flex-shrink-0">
                     <div className="p-3 bg-red-600 text-white rounded-2xl shadow-lg shrink-0"><Sparkles size={24} /></div>
                     <div className="min-w-0">
                        <h4 className="text-[10px] font-black uppercase tracking-widest text-red-600">Optional Quota Utilized</h4>
@@ -358,20 +463,17 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                 </div>
               )}
 
-              {!isOptionalHolidayUsed && selectedHoliday && (
-                <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in zoom-in-95 ${selectedHoliday.type === 'FIXED' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100' : 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100'}`}>
-                  {selectedHoliday.type === 'FIXED' ? <Info className="text-blue-600 w-5 h-5" /> : <Sparkles className="text-indigo-600 w-5 h-5" />}
-                  <p className={`text-[10px] font-black uppercase tracking-widest ${selectedHoliday.type === 'FIXED' ? 'text-blue-900 dark:text-blue-400' : 'text-indigo-900 dark:text-indigo-300'}`}>
-                    {selectedHoliday.type === 'FIXED' ? `Fixed Company Holiday (${selectedHoliday.isHalfDay ? 'Half-Day' : 'Full-Day'}): ${selectedHoliday.name}` : `Available Optional Holiday: ${selectedHoliday.name}`}
-                  </p>
-                </div>
-              )}
+              {/*
+                Mobile: grid-cols-1, each panel renders full height, outer modal scrolls.
+                Desktop: side-by-side columns, lg:h-full so all three stretch to fill.
+              */}
+              <div className={`grid gap-4 sm:gap-6 lg:flex-1 lg:min-h-0 ${currentAssignedTasks.length > 0 ? "grid-cols-1 lg:grid-cols-3 lg:h-full" : "grid-cols-1 lg:grid-cols-[1fr_380px] lg:h-full"}`}>
 
-              <div className={`grid gap-6 sm:gap-8 h-full ${currentAssignedTasks.length > 0 ? "grid-cols-1 lg:grid-cols-3" : "grid-cols-1 lg:grid-cols-[1fr_380px]"}`}>
-                
+                {/* ── Task Queue ── */}
                 {currentAssignedTasks.length > 0 && (
-                  <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4 max-h-[400px] lg:max-h-[600px]">
-                    <div className="flex items-center justify-between">
+                  <div className="bg-indigo-50/50 dark:bg-slate-800/50 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-indigo-100 dark:border-slate-700 flex flex-col space-y-4
+                    h-[300px] sm:h-[360px] lg:h-full">
+                    <div className="flex items-center justify-between flex-shrink-0">
                       <div className="flex items-center gap-3">
                         <ListTodo className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
                         <h3 className="text-xs sm:text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase italic">Queue</h3>
@@ -380,7 +482,8 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                         <button onClick={handleMarkAllCompleted} className="text-[9px] sm:text-[10px] font-black text-indigo-600 uppercase border-b-2 border-indigo-200">Mark Done</button>
                       )}
                     </div>
-                    <div className="flex-1 overflow-y-auto space-y-3">
+                    {/* Always internally scrollable — both mobile (fixed height) and desktop */}
+                    <div className="flex-1 overflow-y-auto space-y-3 scrollbar-thin pr-1">
                       {currentAssignedTasks.map((t, idx) => (
                         <div key={idx} className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-indigo-100 dark:border-slate-800 shadow-sm">
                           <div className="flex items-start gap-3">
@@ -394,21 +497,6 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                             <div className="flex-1 min-w-0">
                               <span className="text-[7px] sm:text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase truncate block w-fit">{t.company}</span>
                               <div className={`text-[10px] sm:text-[11px] mt-1.5 font-bold leading-snug break-words ${t.isDone ? 'line-through text-gray-400' : 'text-gray-700 dark:text-slate-200'}`} dangerouslySetInnerHTML={{ __html: t.task }} />
-                              
-                              <div className="mt-2 text-[8px] font-black text-slate-400 flex flex-col gap-1 uppercase tracking-widest">
-                                {t.assignedAt && (
-                                  <div className="flex items-center gap-1">
-                                    <Clock size={10} className="text-indigo-400" />
-                                    Assigned: {formatAssignedAt(t.assignedAt)}
-                                  </div>
-                                )}
-                                {t.completedAt && (
-                                  <div className="flex items-center gap-1">
-                                    <CheckCircle2 size={10} className="text-emerald-500" />
-                                    Completed: {formatAssignedAt(t.completedAt)}
-                                  </div>
-                                )}
-                              </div>
                             </div>
                           </div>
                         </div>
@@ -417,65 +505,79 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
                   </div>
                 )}
 
-                <div className="bg-gray-50 dark:bg-slate-800/30 rounded-[1.5rem] sm:rounded-[2rem] border border-gray-100 dark:border-slate-800 flex flex-col min-h-[300px] lg:max-h-[600px] overflow-hidden">
-                  <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-2 flex-shrink-0 flex justify-between items-center">
-                    <h3 className="text-[10px] sm:text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">My Submission</h3>
+                {/* ── Submission / Quill ── */}
+                {/*
+                  Mobile: natural height (min-h), outer modal scrolls past it.
+                  Desktop: lg:h-full + lg:overflow-hidden — Quill fills and scrolls internally.
+                */}
+                <div className="bg-gray-50 dark:bg-slate-800/30 rounded-[1.5rem] sm:rounded-[2rem] border border-gray-100 dark:border-slate-800 flex flex-col
+                  min-h-[260px] sm:min-h-[320px] lg:h-full lg:overflow-hidden">
+                  <div className="px-4 sm:px-6 pt-4 sm:pt-5 pb-2 flex-shrink-0 flex justify-between items-center text-gray-400">
+                    <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest">My Submission</h3>
                     {selectedLeave && (
-                      <span className="bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 px-3 py-1 rounded-full text-[8px] font-black uppercase border border-red-200 dark:border-red-800">On Leave</span>
+                      <span className="bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 px-3 py-1 rounded-full text-[8px] font-black uppercase border border-red-200 dark:border-red-800 tracking-widest">
+                        {selectedLeave.type.replace(/_/g, ' ')}
+                      </span>
                     )}
                   </div>
-                  
                   {selectedLeave && (
-                    <div className="px-4 sm:px-6 py-3 bg-red-50 dark:bg-red-950/20 border-y border-red-100 dark:border-red-900/40 flex items-center gap-2 animate-in slide-in-from-top-1">
-                      <Bookmark size={12} className="text-red-500" />
-                      <p className="text-[10px] font-black uppercase tracking-widest text-red-700 dark:text-red-300 italic truncate">
-                        Reason: &quot;{selectedLeave.reason}&quot;
-                      </p>
+                    <div className="mx-4 sm:mx-6 mb-3 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 overflow-hidden flex-shrink-0 animate-in slide-in-from-top-1">
+                      {/* Leave type header row */}
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-red-100/60 dark:bg-red-900/30 border-b border-red-200 dark:border-red-900/50">
+                        <Bookmark size={11} className="text-red-500 shrink-0" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400">Leave Type</span>
+                        <span className="ml-auto text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-500 text-white">
+                          {selectedLeave.status}
+                        </span>
+                      </div>
+                      {/* Category + dates */}
+                      <div className="px-4 py-3 flex flex-col gap-1.5">
+                        <p className="text-sm font-black uppercase tracking-tight text-red-700 dark:text-red-200">
+                          {selectedLeave.type.replace(/_/g, ' ')}
+                        </p>
+                        <p className="text-[9px] font-bold text-red-500/80 dark:text-red-400/70 uppercase tracking-widest">
+                          {format(new Date(selectedLeave.startDate), "dd MMM yyyy")}
+                          {selectedLeave.startDate !== selectedLeave.endDate && (
+                            <> &rarr; {format(new Date(selectedLeave.endDate), "dd MMM yyyy")}</>
+                          )}
+                        </p>
+                        {selectedLeave.reason && (
+                          <p className="text-[10px] font-semibold text-red-600/70 dark:text-red-300/60 italic leading-snug mt-0.5">
+                            &ldquo;{selectedLeave.reason}&rdquo;
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
-
                   <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-                    <ReactQuill
-                      theme="snow"
-                      value={currentPointers}
-                      onChange={setCurrentPointers}
-                      modules={quillModules}
-                      readOnly={viewOnly || !canEditDate(selectedDate) || isLoggingDisabled}
-                      placeholder={isLoggingDisabled ? "Logging is disabled for this holiday." : "Describe what you worked on today..."}
-                      className="flex-1 flex flex-col overflow-hidden"
-                    />
+                    <ReactQuill theme="snow" value={currentPointers} onChange={setCurrentPointers} modules={quillModules} readOnly={viewOnly || !canEditDate(selectedDate) || isLoggingDisabled} placeholder={isLoggingDisabled ? "Logging is disabled for this holiday." : "Describe what you worked on today..."} className="flex-1 flex flex-col overflow-hidden" />
                   </div>
                 </div>
 
-                <div className="bg-amber-50/50 dark:bg-amber-950/10 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-amber-100 dark:border-amber-900/30 flex flex-col space-y-4 lg:max-h-[600px]">
+                {/* ── Status / Feedback ── */}
+                {/*
+                  Mobile: natural height, outer modal scrolls.
+                  Desktop: lg:h-full + lg:overflow-y-auto so it scrolls internally if content overflows.
+                */}
+                <div className="bg-amber-50/50 dark:bg-amber-950/10 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-amber-100 dark:border-amber-900/30 flex flex-col space-y-4
+                  lg:h-full lg:overflow-y-auto scrollbar-thin">
                   <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400">
                     <Edit3 size={18} />
                     <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest">Status</h3>
                   </div>
                   <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-amber-100 dark:border-slate-700">
                     <label className="text-[9px] font-black text-amber-700 dark:text-amber-500 uppercase block mb-1">Live Tracking</label>
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">
-                      {selectedLeave ? `Approved ${selectedLeave.type}` : (currentPointers && currentPointers !== '<p><br></p>' ? "Logs Received" : "Pending Logs")}
-                    </p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-800 dark:text-slate-200">{selectedLeave ? `Approved ${selectedLeave.type}` : (currentPointers && currentPointers !== '<p><br></p>' ? "Logs Received" : "Pending Logs")}</p>
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2 text-orange-600 dark:text-orange-400">
                       <MessageSquare size={14} />
                       <label className="text-[9px] font-black uppercase tracking-widest">Feedback</label>
                     </div>
-                    <div className={`w-full p-4 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] ${viewOnly ? "bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900/30 text-orange-900 dark:text-orange-200" : "bg-white dark:bg-slate-800 border-transparent text-gray-500 dark:text-slate-400 italic shadow-sm dark:shadow-none"}`}>
-                      {currentComment || "No notes yet..."}
-                    </div>
+                    <div className={`w-full p-4 rounded-2xl border-2 font-black uppercase tracking-widest text-[10px] ${viewOnly ? "bg-orange-50 text-orange-900" : "bg-white text-gray-500 italic shadow-sm"}`}>{currentComment || "No notes yet..."}</div>
                   </div>
                   {((!viewOnly && canEditDate(selectedDate)) || viewOnly) && !isLoggingDisabled && (
-                    <button 
-                      onClick={handleSave} 
-                      disabled={isSaving} 
-                      className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl dark:shadow-none flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-30 ${viewOnly ? "bg-orange-600 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
-                    >
-                      {isSaving ? <RefreshCcw className="animate-spin" size={16}/> : <Save size={16} />} 
-                      {isSaving ? "Syncing..." : viewOnly ? "Update Notes" : "Save Log"}
-                    </button>
+                    <button onClick={handleSave} disabled={isSaving} className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl dark:shadow-none flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-30 ${viewOnly ? "bg-orange-600 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}>{isSaving ? <RefreshCcw className="animate-spin" size={16}/> : <Save size={16} />} {isSaving ? "Syncing..." : viewOnly ? "Update Notes" : "Save Log"}</button>
                   )}
                 </div>
               </div>
@@ -490,8 +592,8 @@ export const EmployeeCalendar = forwardRef(({ viewOnly = false, employeeId }: { 
 EmployeeCalendar.displayName = "EmployeeCalendar";
 
 const Legend = ({ color, label, isFilled = false }: { color: string; label: string; isFilled?: boolean }) => (
-  <div className="flex items-center gap-2">
-    <span className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full ${color} ${!isFilled ? 'bg-transparent border border-gray-300' : ''}`} />
-    <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+  <div className="flex items-center gap-2 text-left">
+    <span className={`w-2.5 h-2.5 rounded-full ${color} ${!isFilled ? 'bg-transparent' : ''} shrink-0`} />
+    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</span>
   </div>
 );

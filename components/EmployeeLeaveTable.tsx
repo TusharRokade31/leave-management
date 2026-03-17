@@ -66,6 +66,44 @@ const format12hr = (time?: string | null) => {
   return `${hours}:${m} ${ampm}`;
 };
 
+// ── Returns a human-readable schedule string for EARLY / LATE / HALF ────────
+const getScheduleLabel = (leave: TableLeave): string => {
+  switch (leave.type) {
+    case 'EARLY':
+      return leave.startTime ? `Early leave by ${format12hr(leave.startTime)}` : 'Early Leave';
+    case 'LATE':
+      return leave.startTime ? `Late arrival by ${format12hr(leave.startTime)}` : 'Late Arrival';
+    case 'HALF':
+      if (leave.slot === 'FIRST_HALF')  return '1st Half · 10:00 AM – 2:30 PM';
+      if (leave.slot === 'SECOND_HALF') return '2nd Half · 2:30 PM – 7:00 PM';
+      if (leave.slot === 'CUSTOM' && leave.startTime)
+        return `${format12hr(leave.startTime)}${leave.endTime ? ` – ${format12hr(leave.endTime)}` : ''}`;
+      // fallback for legacy records without slot
+      if (leave.startTime)
+        return `${format12hr(leave.startTime)}${leave.endTime ? ` – ${format12hr(leave.endTime)}` : ''}`;
+      return 'Half Day';
+    default:
+      return '';
+  }
+};
+
+// ── Short label for mobile card row ─────────────────────────────────────────
+const getShortScheduleLabel = (leave: TableLeave): string => {
+  switch (leave.type) {
+    case 'EARLY':
+      return leave.startTime ? `By ${format12hr(leave.startTime)}` : 'Early';
+    case 'LATE':
+      return leave.startTime ? `By ${format12hr(leave.startTime)}` : 'Late';
+    case 'HALF':
+      if (leave.slot === 'FIRST_HALF')  return '1st Half';
+      if (leave.slot === 'SECOND_HALF') return '2nd Half';
+      if (leave.startTime) return format12hr(leave.startTime);
+      return 'Half Day';
+    default:
+      return '';
+  }
+};
+
 export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, onDelete, onUpdate }) => {
   const [selectedLeave, setSelectedLeave] = useState<TableLeave | null>(null);
   const [editingLeave, setEditingLeave] = useState<TableLeave | null>(null);
@@ -206,6 +244,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
             const appliedOptionalHoliday = isOptionalLeave(leave)
               ? holidaysInRange.find(h => h.type === "OPTIONAL") : null;
             const isSameDay = leave.startDate.slice(0, 10) === leave.endDate.slice(0, 10);
+            const shortSchedule = getShortScheduleLabel(leave);
 
             return (
               <div
@@ -238,8 +277,8 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                       )}
                     </div>
 
-                    {/* Row 2: dates + days */}
-                    <div className="flex items-center gap-2">
+                    {/* Row 2: dates + days + schedule */}
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-xs font-black text-slate-800 dark:text-slate-100">
                         {formatDate(leave.startDate)}
                         {!isSameDay && <><span className="text-slate-300 mx-1">→</span>{formatDate(leave.endDate)}</>}
@@ -247,8 +286,8 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                       <span className="text-[9px] font-bold text-slate-400 flex-shrink-0">
                         · {leave.days} {leave.days === 1 ? 'day' : 'days'}
                       </span>
-                      {(leave.type === 'HALF' || ['EARLY', 'LATE'].includes(leave.type)) && leave.startTime && (
-                        <span className="text-[8px] font-bold text-slate-400 flex-shrink-0">{format12hr(leave.startTime)}</span>
+                      {shortSchedule && (
+                        <span className="text-[8px] font-bold text-slate-400 flex-shrink-0">{shortSchedule}</span>
                       )}
                     </div>
                   </div>
@@ -303,6 +342,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                   const fixedHoliday = holidaysInRange.find(h => h.type === 'FIXED');
                   const appliedOptionalHoliday = isOptionalLeave(leave)
                     ? holidaysInRange.find(h => h.type === "OPTIONAL") : null;
+                  const scheduleLabel = getScheduleLabel(leave);
                   return (
                     <tr key={leave.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-800/30 transition-all group">
                       <td className="px-8 py-5">
@@ -313,9 +353,10 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                           {leave.isEdited && (
                             <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 font-black uppercase italic"><History size={10} /> Revised</span>
                           )}
-                          {(leave.type === 'HALF' || ['EARLY', 'LATE'].includes(leave.type)) && leave.startTime && (
+                          {/* ── Fixed: use getScheduleLabel instead of broken slot?.replace logic ── */}
+                          {['HALF', 'EARLY', 'LATE'].includes(leave.type) && scheduleLabel && (
                             <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-[11px] font-black text-indigo-600 uppercase border border-indigo-100 dark:border-indigo-800/50">
-                              {leave.slot?.replace('_', ' ') || 'Schedule'}: {format12hr(leave.startTime)}
+                              {scheduleLabel}
                             </span>
                           )}
                         </div>
@@ -371,6 +412,7 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
         const changedFields = selectedLeave.isEdited && selectedLeave.editSummary
           ? selectedLeave.editSummary.replace('Changed ', '').split(', ')
           : [];
+        const modalScheduleLabel = getScheduleLabel(selectedLeave);
         return (
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-end sm:items-center justify-center z-[130] p-0 sm:p-4 animate-in fade-in slide-in-from-bottom-10 duration-300">
             <div className="bg-white dark:bg-slate-900 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-hidden flex flex-col border border-gray-100 dark:border-slate-800">
@@ -421,14 +463,15 @@ export const EmployeeLeaveTable: React.FC<EmployeeLeaveTableProps> = ({ leaves, 
                       )}
                     </div>
                   </div>
-                  {selectedLeave.startTime && (
+                  {/* ── Fixed: show schedule label for EARLY/LATE/HALF properly ── */}
+                  {['EARLY', 'LATE', 'HALF'].includes(selectedLeave.type) && modalScheduleLabel && (
                     <div className="sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0">
                       <div className="flex sm:justify-end items-center gap-2">
                         {changedFields.includes('Timing') && <span className="text-[8px] font-black bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 px-1.5 py-0.5 rounded uppercase">Edited</span>}
                         <p className={`text-[9px] font-black uppercase ${changedFields.includes('Timing') ? 'text-amber-500' : 'text-slate-400'}`}>Timing</p>
                       </div>
                       <p className={`text-xs sm:text-sm font-black ${changedFields.includes('Timing') ? 'text-amber-700 dark:text-amber-300' : 'text-slate-700 dark:text-slate-200'}`}>
-                        {format12hr(selectedLeave.startTime)}{selectedLeave.endTime ? ` - ${format12hr(selectedLeave.endTime)}` : ''}
+                        {modalScheduleLabel}
                       </p>
                     </div>
                   )}
