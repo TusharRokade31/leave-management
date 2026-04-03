@@ -103,7 +103,13 @@ const buildStatus = (task?: Task, leave?: Leave, isWeekend?: boolean, holiday?: 
   const isApprovedOH = holiday?.type === 'OPTIONAL' && leave?.status === 'APPROVED' && leave?.isOptional === true;
 
   if (isApprovedOH) return `Optional Holiday Used: ${holiday.name}`;
-  if (holiday?.type === 'FIXED') return `Public Holiday: ${holiday.name}`;
+if (leave && leave.type === 'FULL' && leave.status === 'APPROVED') {
+  return `On Leave (FULL) - APPROVED`;
+}
+
+if (holiday?.type === 'FIXED') {
+  return `Public Holiday: ${holiday.name}`;
+}
   if (isWeekend) return 'Weekend';
   
   const done = hasContent(task);
@@ -175,9 +181,23 @@ const EmployeeWorkStatusTable: React.FC<EmployeeWorkStatusTableProps> = ({
   };
 
   const getStatusSymbol = (task?: Task, leave?: Leave, isWeekend?: boolean, holiday?: any) => {
-    if (holiday?.type === 'FIXED') {
-      return { symbol: 'H', color: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300', header: 'bg-red-600' };
-    }
+    // ✅ PRIORITY 1: If FULL leave is approved → override everything (even holiday)
+if (leave && leave.type === 'FULL' && leave.status === 'APPROVED') {
+  return { 
+    symbol: 'FL', 
+    color: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300', 
+    header: 'bg-red-600' 
+  };
+}
+
+// Existing fixed holiday logic
+if (holiday?.type === 'FIXED') {
+  return { 
+    symbol: 'H', 
+    color: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300', 
+    header: 'bg-red-600' 
+  };
+}
     
     // STRICT SYNC: Only show OH symbol if DB confirms it is optional holiday
     const isApprovedOH = holiday?.type === 'OPTIONAL' && leave?.status === 'APPROVED' && leave?.isOptional === true;
