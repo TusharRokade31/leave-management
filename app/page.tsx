@@ -479,7 +479,7 @@ export default function Home() {
                   <div className="p-4 lg:p-6">
                     <div className={taskViewMode === 'company' ? "w-full" : "hidden"}>
                       {/* UPDATED: TaskManagement component receives full props including onUpdateStatus */}
-                      <TaskManagement allTasks={allTasks} currentUser={currentUser} onUpdateStatus={updateStatus} teamMembers={teamMembers} />
+                      <TaskManagement allTasks={allTasks} currentUser={currentUser} onUpdateStatus={updateStatus} />
                     </div>
                     
                     <div className={taskViewMode === 'day' ? "w-full" : "hidden"}>

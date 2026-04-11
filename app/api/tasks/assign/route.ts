@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
         select: { companyName: true }
       });
       
-      const myCompanyNames = Array.from(new Set(myAssignments.map(t => t.companyName)));
+      const myCompanyNames = Array.from(new Set(myAssignments.map(t => t.companyName).filter((c): c is string => c !== null)));
 
       // 2. Fetch all tasks for those companies (this includes tasks assigned to teammates)
       tasks = await prisma.assignedTask.findMany({

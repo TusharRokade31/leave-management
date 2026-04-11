@@ -156,7 +156,10 @@ export async function GET(req: NextRequest) {
           where: { userId: decoded.id },
           select: { companyName: true }
         });
-        companyFilter = Array.from(new Set(myAssignments.map(t => t.companyName)));
+        // Filter out nulls so the array satisfies string[] for Prisma's { in: ... }
+        companyFilter = Array.from(new Set(
+          myAssignments.map(t => t.companyName).filter((c): c is string => c !== null)
+        ));
       }
 
       const teamTasks = await prisma.assignedTask.findMany({
