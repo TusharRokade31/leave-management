@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, authenticateToken } from '@/lib/auth';
 
+/**
+ * POST: Handles both Daily Log updates (Task) and Task Assignments (AssignedTask)
+ */
 export async function POST(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const body = await req.json();
     const { date, content, managerComment, employeeId, assignedTasks } = body;
 
@@ -32,7 +37,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 2. Manager Assignment Persistence
+    // 2. Manager Assignment Persistence (Delete and Re-create for the day)
     if (isManager && Array.isArray(assignedTasks)) {
       const dayEnd = new Date(normalizedDate);
       dayEnd.setUTCHours(23, 59, 59, 999);
@@ -59,7 +64,7 @@ export async function POST(req: NextRequest) {
         })
       ]);
     } 
-    // 3. EMPLOYEE SYNC LOGIC & ORIGIN STATUS CAPTURE
+    // 3. Employee Sync Logic (Update existing task statuses)
     else if (!isManager && Array.isArray(assignedTasks)) {
       const hasCompletedTask = assignedTasks.some((t: any) => 
         t.isDone === true || t.status?.toUpperCase() === 'COMPLETED'
@@ -69,13 +74,11 @@ export async function POST(req: NextRequest) {
 
       await prisma.$transaction(async (tx) => {
         for (const t of validTasks) {
-          // ✅ FETCH CURRENT STATE TO CAPTURE PREVIOUS STATUS
           const currentTask = await tx.assignedTask.findUnique({
             where: { id: t.id },
-            select: { status: true, commentHistory: true }
+            select: { status: true }
           });
 
-          // Only update if task exists
           if (currentTask) {
             const isTaskDone = Boolean(t.isDone);
             const newStatus = t.status || (isTaskDone ? "COMPLETED" : "ASSIGNED");
@@ -92,7 +95,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Update main daily log completion status
+        // Update main daily log completion flag
         await tx.task.update({
           where: { userId_date: { userId: targetUserId, date: normalizedDate } },
           data: { isCompleted: hasCompletedTask }
@@ -112,6 +115,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * GET: Retrieves tasks. 
+ * Supports: 
+ * - Individual Employee View
+ * - Global Manager Overview
+ * - Unified Company Pipeline View (for teammates)
+ */
 export async function GET(req: NextRequest) {
   try {
     const token = req.headers.get('authorization')?.split(' ')[1];
@@ -124,19 +134,57 @@ export async function GET(req: NextRequest) {
     const month = searchParams.get('month');
     const year = searchParams.get('year');
     const userIdParam = searchParams.get('userId');
+    const view = searchParams.get('view');
 
     const isManager = decoded.role === 'MANAGER';
-    const filterUserId = userIdParam ? parseInt(userIdParam) : (!isManager ? decoded.id : undefined);
-
+    
     let startDate: Date | undefined;
     let endDate: Date | undefined;
-
     if (month && year) {
       startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
       endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
     }
 
-    // --- LOGIC FOR SINGLE USER (EMPLOYEE CALENDAR & TASK BOARD) ---
+    // --- PIPELINE VIEW ---
+    // MANAGER: sees ALL employees' tasks across all companies (no company filter)
+    // EMPLOYEE: sees only teammates in their own assigned companies
+    if (view === 'company_pipeline') {
+      let companyFilter: string[] | undefined;
+
+      if (!isManager) {
+        const myAssignments = await prisma.assignedTask.findMany({
+          where: { userId: decoded.id },
+          select: { companyName: true }
+        });
+        companyFilter = Array.from(new Set(myAssignments.map(t => t.companyName)));
+      }
+
+      const teamTasks = await prisma.assignedTask.findMany({
+        where: {
+          ...(companyFilter ? { companyName: { in: companyFilter } } : {}),
+          createdAt: startDate && endDate ? { gte: startDate, lte: endDate } : undefined
+        },
+        include: { user: { select: { name: true, id: true } } },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      return NextResponse.json(teamTasks.map(at => ({
+        id: at.id,
+        company: at.companyName,
+        task: at.taskTitle,
+        status: at.status,
+        employeeName: at.user?.name || "Unknown",
+        employeeId: at.userId,
+        isDone: at.isDone,
+        date: at.createdAt,
+        managerComment: at.managerComment,
+        commentHistory: at.commentHistory || []
+      })));
+    }
+
+    // --- INDIVIDUAL USER LOGIC (Calendar & Task Board) ---
+    const filterUserId = userIdParam ? parseInt(userIdParam) : (!isManager ? decoded.id : undefined);
+
     if (filterUserId) {
       const [tasks, assignedTasks, leaves] = await Promise.all([
         prisma.task.findMany({
@@ -149,7 +197,6 @@ export async function GET(req: NextRequest) {
         }),
         prisma.leave.findMany({
           where: { userId: filterUserId, status: 'APPROVED' },
-          // ✅ ENSURE OPTIONAL FIELDS ARE SELECTED
           select: { id: true, startDate: true, endDate: true, type: true, status: true, reason: true, isOptional: true, holidayName: true }
         })
       ]);
@@ -187,22 +234,14 @@ export async function GET(req: NextRequest) {
       });
 
       taskResults.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
-      return NextResponse.json({
-        tasks: taskResults,
-        leaves: leaves
-      });
+      return NextResponse.json({ tasks: taskResults, leaves });
     }
 
-    // --- LOGIC FOR MANAGER OVERVIEW (TEAM BOARD) ---
+    // --- MANAGER TEAM OVERVIEW ---
     const usersData = await prisma.user.findMany({
       where: { role: 'EMPLOYEE' },
       select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        endDate: true,
+        id: true, name: true, email: true, role: true, endDate: true,
         assignedTasks: {
           where: startDate && endDate ? { createdAt: { gte: startDate, lte: endDate } } : undefined,
           orderBy: { createdAt: 'desc' }
@@ -213,7 +252,6 @@ export async function GET(req: NextRequest) {
         },
         leaves: {
           where: { status: 'APPROVED' },
-          // ✅ ENSURE OPTIONAL FIELDS ARE SELECTED FOR MANAGER OVERVIEW
           select: { startDate: true, endDate: true, type: true, status: true, reason: true, isOptional: true, holidayName: true }
         }
       },
@@ -231,26 +269,15 @@ export async function GET(req: NextRequest) {
         const dailyAssigned = emp.assignedTasks
           .filter((at) => new Date(at.createdAt).toISOString().split('T')[0] === dateKey)
           .map((at) => ({
-            id: at.id,
-            company: at.companyName, 
-            task: at.taskTitle,
-            status: at.status,
-            managerComment: at.managerComment,
-            commentHistory: at.commentHistory || [], 
-            isDone: at.isDone,
-            assignedAt: at.createdAt,
-            completedAt: at.completedAt,
-            updatedAt: at.updatedAt 
+            id: at.id, company: at.companyName, task: at.taskTitle, status: at.status,
+            managerComment: at.managerComment, commentHistory: at.commentHistory || [],
+            isDone: at.isDone, assignedAt: at.createdAt, completedAt: at.completedAt, updatedAt: at.updatedAt 
           }));
 
         return {
-          id: taskRecord?.id || null, 
-          userId: emp.id,
-          date: taskRecord?.date || new Date(dateKey), 
-          content: taskRecord?.content || "",
-          managerComment: taskRecord?.managerComment || null,
-          status: taskRecord?.status || 'PRESENT',
-          isCompleted: taskRecord?.isCompleted || false,
+          id: taskRecord?.id || null, userId: emp.id, date: taskRecord?.date || new Date(dateKey),
+          content: taskRecord?.content || "", managerComment: taskRecord?.managerComment || null,
+          status: taskRecord?.status || 'PRESENT', isCompleted: taskRecord?.isCompleted || false,
           assignedTasks: dailyAssigned, 
         };
       });

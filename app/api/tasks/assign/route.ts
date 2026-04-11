@@ -2,6 +2,80 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 
+/**
+ * GET: Retrieves tasks for the board.
+ * Managers see everything. 
+ * Employees see their tasks OR the full company pipeline if requested.
+ */
+export async function GET(req: NextRequest) {
+  try {
+    const authUser = authenticateToken(req);
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const view = searchParams.get('view');
+
+    let tasks;
+
+    // Logic for Manager
+    if (authUser.role === 'MANAGER') {
+      tasks = await prisma.assignedTask.findMany({
+        include: { user: true },
+        orderBy: { createdAt: 'desc' }
+      });
+    } 
+    // Logic for Employee to see "All Assigned Team Members" for their companies
+    else if (view === 'company_pipeline') {
+      // 1. Find all companies this specific employee is currently assigned to
+      const myAssignments = await prisma.assignedTask.findMany({
+        where: { userId: authUser.id },
+        select: { companyName: true }
+      });
+      
+      const myCompanyNames = Array.from(new Set(myAssignments.map(t => t.companyName)));
+
+      // 2. Fetch all tasks for those companies (this includes tasks assigned to teammates)
+      tasks = await prisma.assignedTask.findMany({
+        where: {
+          companyName: { in: myCompanyNames }
+        },
+        include: { user: true },
+        orderBy: { createdAt: 'desc' }
+      });
+    } 
+    // Default Employee view (Private)
+    else {
+      tasks = await prisma.assignedTask.findMany({
+        where: { userId: authUser.id },
+        include: { user: true },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
+
+    // Map to the FlattenedTask interface used by TaskManagement.tsx
+    const result = tasks.map(t => ({
+      id: t.id,
+      company: t.companyName,
+      task: t.taskTitle,
+      status: t.status || 'ASSIGNED',
+      employeeName: t.user?.name || 'Unknown',
+      employeeId: t.userId,
+      date: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt?.toISOString(),
+      managerComment: t.managerComment,
+      commentHistory: t.commentHistory
+    }));
+
+    return NextResponse.json(result);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+/**
+ * POST: Saves/Synchronizes task assignments.
+ * (Your provided logic with timestamp preservation)
+ */
 export async function POST(req: NextRequest) {
   try {
     const authUser = authenticateToken(req);
@@ -17,15 +91,12 @@ export async function POST(req: NextRequest) {
     }
 
     const targetUserId = Number(employeeId);
-
-    // Normalize for the deletion range only
     const dayStart = new Date(date);
     dayStart.setUTCHours(0, 0, 0, 0);
-
     const dayEnd = new Date(date);
     dayEnd.setUTCHours(23, 59, 59, 999);
 
-    // 1️⃣ Delete old tasks for this specific day
+    // 1️⃣ Delete old tasks for this specific day to overwrite
     await prisma.assignedTask.deleteMany({
       where: {
         userId: targetUserId,
@@ -33,13 +104,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 2️⃣ Insert new tasks
+    // 2️⃣ Insert new tasks while preserving time
     const createdTasks = [];
-
     for (const t of assignedTasks) {
-      // ⭐ FIX: Preserve the existing timestamp if available, 
-      // otherwise capture the current real-time. 
-      // Do NOT use dayStart (midnight).
       const finalTimestamp = t.assignedAt ? new Date(t.assignedAt) : new Date();
 
       const created = await prisma.assignedTask.create({
@@ -48,26 +115,24 @@ export async function POST(req: NextRequest) {
           companyName: String(t.company || t.companyName || ""),
           taskTitle: String(t.task || t.taskTitle || ""),
           isDone: Boolean(t.isDone),
-          createdAt: finalTimestamp, // 👈 Stores full time (HH:mm:ss)
+          createdAt: finalTimestamp,
         },
       });
-
       createdTasks.push(created);
     }
 
-    // 3️⃣ Return mapped response with the new timestamps
     const result = createdTasks.map(t => ({
       id: t.id,
       company: t.companyName,
       task: t.taskTitle,
       isDone: t.isDone,
-      assignedAt: t.createdAt, // This now returns the real time to the UI
+      assignedAt: t.createdAt,
     }));
 
     return NextResponse.json({ assignedTasks: result });
 
   } catch (err: any) {
-    console.error("Assignment Save Error FULL:", err);
+    console.error("Assignment Save Error:", err);
     return NextResponse.json(
       { error: err.message || 'Failed to synchronize tasks' },
       { status: 500 }
