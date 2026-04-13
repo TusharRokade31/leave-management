@@ -52,6 +52,7 @@ export default function Home() {
     refreshData 
   } = useEmployeeWorkStatus(currentUser, currentMonth);
 
+  // UPDATED: Hook now correctly receives 'employees' as initial data and 'currentUser' for role-based logic
   const { allTasks, updateStatus, refreshTasks } = useTaskManagement(employees, currentUser);
 
   const [showLeaveForm, setShowLeaveForm] = useState(false);
@@ -86,6 +87,7 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // UPDATED: Ensure tasks are refreshed specifically when switching to 'company' view
   useEffect(() => {
     if (activeTab === 'tasks' && taskViewMode === 'company' && typeof refreshTasks === 'function') {
       refreshTasks();
@@ -134,6 +136,49 @@ export default function Home() {
       completed: currentMonthTasks.filter(t => t.status?.toUpperCase() === 'COMPLETED').length,
     };
   }, [allTasks, currentUser, currentMonth]);
+
+  // ================= TEAM MEMBERS (for TaskManagement manager view) =================
+  // Build a flat list of { id, name, company } from employees so the manager sub-header
+  // always shows every employee assigned to a company, independent of allTasks data.
+  const teamMembers = useMemo(() => {
+    if (!employees || employees.length === 0) return [];
+    const members: { id: number; name: string; company: string }[] = [];
+    employees.forEach((emp: any) => {
+      if (!emp?.user) return;
+      const empId = Number(emp.user.id);
+      const empName = emp.user.name || '';
+      // Each employee may have tasks across multiple companies
+      // Pull unique companies from their work entries
+      const empCompanies = new Set<string>();
+      if (emp.tasks && Array.isArray(emp.tasks)) {
+        emp.tasks.forEach((t: any) => {
+          if (t.company) empCompanies.add(t.company.trim());
+        });
+      }
+      if (emp.workEntries && Array.isArray(emp.workEntries)) {
+        emp.workEntries.forEach((w: any) => {
+          if (w.company) empCompanies.add(w.company.trim());
+        });
+      }
+      // Fallback: also check allTasks for this employee's companies
+      if (allTasks && Array.isArray(allTasks)) {
+        allTasks.forEach((t: any) => {
+          if (Number(t.employeeId) === empId && t.company) {
+            empCompanies.add(t.company.trim());
+          }
+        });
+      }
+      if (empCompanies.size === 0) {
+        // Employee exists but has no company yet — add with empty company so they still appear
+        members.push({ id: empId, name: empName, company: '' });
+      } else {
+        empCompanies.forEach(company => {
+          members.push({ id: empId, name: empName, company });
+        });
+      }
+    });
+    return members;
+  }, [employees, allTasks]);
 
   // ================= HANDLERS =================
   const handleLogout = async () => {
@@ -431,9 +476,9 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* CHANGED: Removed justify-start flex wrapper to stop inner centering logic */}
                   <div className="p-4 lg:p-6">
                     <div className={taskViewMode === 'company' ? "w-full" : "hidden"}>
+                      {/* UPDATED: TaskManagement component receives full props including onUpdateStatus */}
                       <TaskManagement allTasks={allTasks} currentUser={currentUser} onUpdateStatus={updateStatus} />
                     </div>
                     
@@ -457,7 +502,6 @@ export default function Home() {
                           />
                         )
                       ) : (
-                        /* CHANGED: Simple div wrapper, the component handles its own ml-0 */
                         <div className="p-2">
                           <EmployeeCalendar ref={calendarRef} employeeId={Number(currentUser.id)} />
                         </div>
